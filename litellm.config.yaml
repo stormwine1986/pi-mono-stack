@@ -1,0 +1,12 @@
+model_list:
+  # --- #1 ---
+  - model_name: gemini-3-flash-preview
+    litellm_params:
+      model_id: google-account-1
+      model: gemini/gemini-3-flash-preview
+      api_key: "os.environ/GEMINI_API_KEY"
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  callbacks: ["langfuse_otel","prometheus"]

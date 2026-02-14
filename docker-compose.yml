@@ -35,6 +35,19 @@ services:
       - TELEGRAM_TOKEN
       - REDIS_URL=redis://localhost:6379
       - ALLOWED_USER_IDS=7722403902
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.81.9-nightly
+    container_name: litellm
+    environment:
+      - GEMINI_API_KEY
+      - LANGFUSE_PUBLIC_KEY=pk-lf-493ce7f9-d1f6-4482-a658-fe4ac98da5c4
+      - LANGFUSE_OTEL_HOST=https://us.cloud.langfuse.com
+      - LANGFUSE_SECRET_KEY
+    volumes:
+      - ./litellm.config.yaml:/app/config.yaml
+    command: "--config /app/config.yaml"
+    network_mode: host
     
 volumes:
   redis_data:
