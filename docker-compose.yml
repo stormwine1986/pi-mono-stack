@@ -1,0 +1,40 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    network_mode: host
+
+  agent:
+    image: pi-mono-agent:latest
+    container_name: agent
+    network_mode: host
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://localhost:6379
+      - GEMINI_API_KEY
+    volumes:
+      - /home/ubuntu/.pi:/home/pi-mono/.pi
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+      network: host
+    container_name: gateway
+    depends_on:
+      - redis
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TELEGRAM_TOKEN
+      - REDIS_URL=redis://localhost:6379
+      - ALLOWED_USER_IDS=7722403902
+    
+volumes:
+  redis_data:
