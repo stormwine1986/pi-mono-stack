@@ -55,6 +55,18 @@ services:
       - ./litellm.config.yaml:/app/config.yaml
     command: "--config /app/config.yaml"
     network_mode: host
-    
+
+  memsearch:
+    build:
+      context: memsearch
+      dockerfile: Dockerfile
+    container_name: memsearch
+    environment:
+      - VOYAGE_API_KEY
+    volumes:
+      - /home/ubuntu/.pi:/home/pi-mono/.pi
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   redis_data:
