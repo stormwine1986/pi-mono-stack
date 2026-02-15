@@ -47,6 +47,7 @@ services:
     container_name: litellm
     environment:
       - GEMINI_API_KEY
+      - OPENROUTER_API_KEY
       - LANGFUSE_PUBLIC_KEY=pk-lf-493ce7f9-d1f6-4482-a658-fe4ac98da5c4
       - LANGFUSE_OTEL_HOST=https://us.cloud.langfuse.com
       - LANGFUSE_SECRET_KEY
