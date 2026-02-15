@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
 import { Redis } from 'ioredis';
 import { config } from './config.js';
-import { WorkerTask, WorkerControlSignal, WorkerResponse } from './types.js';
+import { WorkerTask, WorkerControlSignal, WorkerResponse } from 'pi-protocol';
 
 const bot = new Telegraf(config.telegramToken);
 const redisProducer = new Redis(config.redisUrl);

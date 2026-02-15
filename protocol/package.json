@@ -1,0 +1,17 @@
+{
+  "name": "pi-protocol",
+  "version": "1.0.0",
+  "description": "Shared protocol definitions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

@@ -23,8 +23,8 @@ services:
 
   gateway:
     build:
-      context: ./gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: gateway/Dockerfile
       network: host
     container_name: gateway
     depends_on:
