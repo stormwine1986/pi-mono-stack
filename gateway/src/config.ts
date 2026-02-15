@@ -4,6 +4,8 @@ export const config = {
     agent_in: 'agent_in',
     agent_out: 'agent_out',
     agent_ctl: 'agent_ctl',
+    tgConsumerGroup: 'tg-bot',
+    tgConsumerName: 'bot-1',
     allowedUserIds: process.env.ALLOWED_USER_IDS
         ? process.env.ALLOWED_USER_IDS.toString().split(',').map(id => parseInt(id.trim()))
         : [],

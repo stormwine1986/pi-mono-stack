@@ -14,7 +14,7 @@ services:
     depends_on:
       - redis
     environment:
-      - REDIS_URL=redis://localhost:6379
+      - REDIS_URL=redis://127.0.0.1:6379
       - GEMINI_API_KEY
     volumes:
       - /home/ubuntu/.pi:/home/pi-mono/.pi
@@ -33,7 +33,7 @@ services:
     network_mode: host
     environment:
       - TELEGRAM_TOKEN
-      - REDIS_URL=redis://localhost:6379
+      - REDIS_URL=redis://127.0.0.1:6379
       - ALLOWED_USER_IDS=7722403902
 
   litellm:

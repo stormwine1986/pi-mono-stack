@@ -89,40 +89,68 @@ bot.on('message', async (ctx) => {
         };
 
         logger.info(`Pushing task to ${config.agent_in}: ${task.prompt}`);
-        // Change: Use rpush + backend blpop = FIFO
-        await redisProducer.rpush(config.agent_in, JSON.stringify(task));
+        // Use XADD for Redis Stream
+        await redisProducer.xadd(config.agent_in, '*', 'payload', JSON.stringify(task));
     }
 });
 
 // 3. Listen to Redis results queue (Output Queue -> WorkerResponse)
 async function startResultListener() {
-    logger.info(`Starting result listener on ${config.agent_out}...`);
+    logger.info(`Starting result listener on ${config.agent_out} (group: ${config.tgConsumerGroup}, consumer: ${config.tgConsumerName})...`);
+
+    // Ensure consumer group exists
+    try {
+        await redisConsumer.xgroup('CREATE', config.agent_out, config.tgConsumerGroup, '$', 'MKSTREAM');
+        logger.info(`Consumer group ${config.tgConsumerGroup} created`);
+    } catch (err: any) {
+        if (err.message.includes('BUSYGROUP')) {
+            // Group already exists
+        } else {
+            logger.error('Error creating consumer group:', err);
+        }
+    }
+
     while (true) {
         try {
-            // Change: Use blpop + backend rpush = FIFO
-            const result = await redisConsumer.blpop(config.agent_out, 0);
-            if (result) {
-                const rawMessage = result[1];
-                logger.info(`Received raw message from ${config.agent_out}: ${rawMessage}`);
-                const response = JSON.parse(rawMessage) as WorkerResponse;
+            // Use XREADGROUP for Redis Stream
+            // ioredis xreadgroup returns: [ [streamName, [ [id, [field, value, ...]] ]] ]
+            const result = await (redisConsumer as any).xreadgroup(
+                'GROUP', config.tgConsumerGroup, config.tgConsumerName,
+                'COUNT', 1, 'BLOCK', 0, 'STREAMS', config.agent_out, '>'
+            );
 
-                if (!response.id) continue;
+            if (result && result.length > 0) {
+                const [streamName, messages] = result[0];
+                for (const [id, fields] of messages) {
+                    // fields is [ 'payload', '{"id":...}' ]
+                    const dataIndex = fields.indexOf('payload');
+                    if (dataIndex === -1) continue;
 
-                const tgInfo = parseTaskId(response.id);
-                if (!tgInfo) continue;
+                    const rawMessage = fields[dataIndex + 1];
+                    logger.info(`Received message ${id} from ${streamName}: ${rawMessage}`);
 
-                if (response.status === 'success') {
-                    await bot.telegram.sendMessage(tgInfo.chatId, response.response, {
-                        reply_parameters: { message_id: tgInfo.messageId },
-                    });
-                } else if (response.status === 'error') {
-                    await bot.telegram.sendMessage(tgInfo.chatId, `❌ Error: ${response.error}`, {
-                        reply_parameters: { message_id: tgInfo.messageId },
-                    });
-                } else if (response.status === 'progress') {
-                    // Send typing indicator to TG
-                    await bot.telegram.sendChatAction(tgInfo.chatId, 'typing');
-                    logger.info(`Progress: ${response.event} for taskId ${response.id}`);
+                    const response = JSON.parse(rawMessage) as WorkerResponse;
+
+                    if (response.id) {
+                        const tgInfo = parseTaskId(response.id);
+                        if (tgInfo) {
+                            if (response.status === 'success') {
+                                await bot.telegram.sendMessage(tgInfo.chatId, response.response, {
+                                    reply_parameters: { message_id: tgInfo.messageId },
+                                });
+                            } else if (response.status === 'error') {
+                                await bot.telegram.sendMessage(tgInfo.chatId, `❌ Error: ${response.error}`, {
+                                    reply_parameters: { message_id: tgInfo.messageId },
+                                });
+                            } else if (response.status === 'progress') {
+                                await bot.telegram.sendChatAction(tgInfo.chatId, 'typing');
+                                logger.info(`Progress: ${response.event} for taskId ${response.id}`);
+                            }
+                        }
+                    }
+
+                    // Acknowledge the message
+                    await redisConsumer.xack(config.agent_out, config.tgConsumerGroup, id);
                 }
             }
         } catch (error) {
