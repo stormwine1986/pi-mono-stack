@@ -1,0 +1,9 @@
+node_modules
+dist
+.pi
+.git
+pi-mono/node_modules
+gateway/node_modules
+protocol/node_modules
+**/node_modules
+**/dist

@@ -8,6 +8,12 @@ services:
     network_mode: host
 
   agent:
+    build:
+      context: pi-mono
+      dockerfile: Dockerfile
+      additional_contexts:
+        - protocol=protocol
+      network: host
     image: pi-mono-agent:latest
     container_name: agent
     network_mode: host
