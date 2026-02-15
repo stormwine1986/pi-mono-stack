@@ -3,6 +3,7 @@
     "private": true,
     "workspaces": [
         "gateway",
-        "protocol"
+        "protocol",
+        "pi-mono/packages/worker"
     ]
 }
