@@ -14,8 +14,9 @@ RUN pip install --no-cache-dir "memsearch" "memsearch[google]" "memsearch[voyage
 RUN groupadd -g 1000 pi-mono && \
     useradd -u 1000 -g pi-mono -m -s /bin/bash pi-mono
 
-# 复制并设置入口脚本 (由 root 执行)
+# 复制脚本 (由 root 执行)
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY config.py /usr/local/bin/config.py
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # 切换到 pi-mono 用户

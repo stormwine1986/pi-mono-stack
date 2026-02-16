@@ -17,6 +17,5 @@ overlap_lines = 2
 debounce_ms = 3000
 
 [compact]
-llm_provider = "ollama"
-llm_model = ""
-prompt_file = ""
+llm_provider = "gemini"
+llm_model = "gemini-2.5-flash"

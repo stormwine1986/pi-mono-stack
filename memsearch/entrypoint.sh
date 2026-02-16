@@ -26,6 +26,10 @@ echo "Python Version: $(python3 --version 2>&1)"
 echo "Memsearch Version: $(pip show memsearch | grep Version | awk '{print $2}')"
 echo "-------------------"
 
-# Start monitoring memory directory
-echo "Starting memsearch watch..."
-exec memsearch watch /home/pi-mono/.pi/agent/workspace/memory/
+# Index memory directory on startup
+echo "Indexing memory directory..."
+memsearch index /home/pi-mono/.pi/agent/workspace/memory/
+
+# Keep container alive
+echo "Memsearch is ready."
+tail -f /dev/null

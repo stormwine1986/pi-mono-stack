@@ -77,12 +77,16 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - **Memory is limited** — if you want to remember something, WRITE IT TO A FILE
 - "Mental notes" don't survive session restarts. Files do.
 - When someone says "remember this" → update `memory/YYYY-MM-DD.md` or relevant file
-- When you learn a lesson → update AGENTS.md, TOOLS.md, or the relevant skill
-- When you make a mistake → document it so future-you doesn't repeat it
+- When you uncover user preferences, important decisions, or key facts in the conversation → update `MEMORY.md`.
+- When you learn a lesson → update `MEMORY.md`
+- When you learn a best practice → update `MEMORY.md`
 - **Text > Brain** 📝
 
 ### Memory Recall
 Before answering anything about prior work, decisions, dates, people, preferences, or todos: run `memsearch.sh <query>` with `bash` to search; then use `read` to pull only the needed lines. If low confidence after search, say you checked.
+
+## Soul
+`SOUL.md` defined agent's soul, it is a file that contains the agent's personality, values, and beliefs. It is a file that is read-only and should not be modified by the agent.
 
 ## External vs Internal
 **Safe to do freely:**
