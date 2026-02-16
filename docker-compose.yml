@@ -23,7 +23,7 @@ services:
       - REDIS_URL=redis://127.0.0.1:6379
       - GEMINI_API_KEY
     volumes:
-      - /home/ubuntu/.pi:/home/pi-mono/.pi
+      - ./.pi:/home/pi-mono/.pi
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
@@ -64,7 +64,7 @@ services:
     environment:
       - VOYAGE_API_KEY
     volumes:
-      - /home/ubuntu/.pi:/home/pi-mono/.pi
+      - ./.pi:/home/pi-mono/.pi
     network_mode: host
     restart: unless-stopped
 

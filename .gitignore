@@ -6,3 +6,5 @@ dist/
 build/
 .idea/
 .vscode/
+.pi/agent/sessions/
+.pi/agent/workspace/
