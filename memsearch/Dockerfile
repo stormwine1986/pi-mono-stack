@@ -23,9 +23,8 @@ USER pi-mono
 WORKDIR /home/pi-mono
 ENV HOME=/home/pi-mono
 
-# 创建工作区中的数据存储目录并设置软链接 (由 pi-mono 执行)
-RUN mkdir -p /home/pi-mono/.pi/agent/workspace/.memsearch && \
-    ln -sf /home/pi-mono/.pi/agent/workspace/.memsearch /home/pi-mono/.memsearch
+# 创建工作区中的数据存储目录 (由 pi-mono 执行)
+RUN mkdir -p /home/pi-mono/.memsearch
 
 
 # 使用 entrypoint 脚本

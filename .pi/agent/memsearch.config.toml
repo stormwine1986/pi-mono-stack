@@ -1,0 +1,22 @@
+# Example ~/.memsearch/config.toml
+
+[milvus]
+uri = "/home/pi-mono/.pi/agent/workspace/milvus.db"
+token = ""
+collection = "memory"
+
+[embedding]
+provider = "voyage"
+model = "voyage-4"
+
+[chunking]
+max_chunk_size = 400
+overlap_lines = 2
+
+[watch]
+debounce_ms = 3000
+
+[compact]
+llm_provider = "ollama"
+llm_model = ""
+prompt_file = ""

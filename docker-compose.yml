@@ -52,7 +52,7 @@ services:
       - LANGFUSE_OTEL_HOST=https://us.cloud.langfuse.com
       - LANGFUSE_SECRET_KEY
     volumes:
-      - ./litellm.config.yaml:/app/config.yaml
+      - ./.pi/agent/litellm.config.yaml:/app/config.yaml
     command: "--config /app/config.yaml"
     network_mode: host
 
@@ -65,6 +65,7 @@ services:
       - VOYAGE_API_KEY
     volumes:
       - ./.pi:/home/pi-mono/.pi
+      - ./.pi/agent/memsearch.config.toml:/home/pi-mono/.memsearch/config.toml
     network_mode: host
     restart: unless-stopped
 
