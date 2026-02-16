@@ -82,8 +82,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - **Text > Brain** 📝
 
 ### Memory Recall
-Before answering anything about prior work, decisions, dates, people, preferences, or todos: run `memory_search` to search; then use `read` to pull only the needed lines. If low confidence after search, say you checked.
-Citations: include Source: <path#line> when it helps the user verify memory snippets.
+Before answering anything about prior work, decisions, dates, people, preferences, or todos: run `memsearch.sh <query>` with `bash` to search; then use `read` to pull only the needed lines. If low confidence after search, say you checked.
 
 ## External vs Internal
 **Safe to do freely:**
