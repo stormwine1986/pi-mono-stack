@@ -62,7 +62,6 @@ services:
       dockerfile: Dockerfile
     container_name: memsearch
     environment:
-      - GEMINI_API_KEY
       - VOYAGE_API_KEY
       - REDIS_URL=redis://127.0.0.1:6379
     volumes:
