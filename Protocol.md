@@ -17,10 +17,12 @@ Represents a task or prompt sent to the Agent for processing.
 **Format (JSON):**
 ```json
 {
-  "id": "uuid-string",       // Unique task identifier
-  "source": "string",        // Source of the request (e.g., "telegram", "web")
+  "id": "string",            // Unique task identifier. 
+                             // - Telegram: "chatId:messageId"
+                             // - Dkron: "dkron:jobName:redisMsgId" (where redisMsgId is the ID assigned by dkron_out stream)
+  "source": "string",        // Source of the request ("telegram", "dkron")
   "prompt": "string",        // User prompt or command text
-  "metadata": { ... }        // Optional metadata
+  "metadata": { ... }        // Optional metadata from the source (e.g., dkron execution results)
 }
 ```
 
@@ -33,7 +35,7 @@ Represents the response or status update from the Agent.
 **Format (JSON):**
 ```json
 {
-  "id": "uuid-string",       // Corresponds to the input task ID
+  "id": "string",            // Corresponds to the input task ID
   "status": "success" | "error" | "progress",
   "response": "string",      // Final text response (if status is success)
   "error": "string",         // Error message (if status is error)
@@ -51,7 +53,7 @@ Control signals to manage the Agent's lifecycle or current operation.
 **Format (JSON):**
 ```json
 {
-  "id": "uuid-string",       // Optional task ID to target
+  "id": "string",            // Optional task ID to target
   "command": "stop" | "steer" | "reset",
   "message": "string"        // Optional message or instruction
 }
@@ -59,7 +61,7 @@ Control signals to manage the Agent's lifecycle or current operation.
 
 ### 4. Dkron Output (`dkron_out`)
 Stream: `dkron_out` (Redis Stream)
-Direction: Dkron Wrapper -> Agent/Monitor
+Direction: Dkron -> Gateway
 
 Stream of job execution results from Dkron tasks.
 
@@ -67,6 +69,7 @@ Stream of job execution results from Dkron tasks.
 ```json
 {
   "job": "string",           // Job name (e.g., "backup-task")
+  "description": "string",   // Job description or display name
   "exit_code": number,       // Exit code (0 for success)
   "output": "string",        // Combined stdout and stderr of the command
   "timestamp": "ISO-8601"    // Execution timestamp (UTC)

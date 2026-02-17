@@ -6,6 +6,7 @@ import { WorkerTask, WorkerControlSignal, WorkerResponse } from 'pi-protocol';
 const bot = new Telegraf(config.telegramToken);
 const redisProducer = new Redis(config.redisUrl);
 const redisConsumer = new Redis(config.redisUrl);
+const redisDkronConsumer = new Redis(config.redisUrl);
 
 function getTimestamp() {
     const now = new Date();
@@ -146,6 +147,14 @@ async function startResultListener() {
                                 await bot.telegram.sendChatAction(tgInfo.chatId, 'typing');
                                 logger.info(`Progress: ${response.event} for taskId ${response.id}`);
                             }
+                        } else if (response.id.startsWith('dkron:') && config.allowedUserIds.length > 0) {
+                            // Forward Dkron responses to the first allowed user (Admin)
+                            const adminId = config.allowedUserIds[0];
+                            if (response.status === 'success') {
+                                await bot.telegram.sendMessage(adminId, `🔔 <b>Dkron Task Update</b>\n\n${response.response}`, { parse_mode: 'HTML' });
+                            } else if (response.status === 'error') {
+                                await bot.telegram.sendMessage(adminId, `❌ <b>Dkron Task Error</b>\n\n${response.error}`, { parse_mode: 'HTML' });
+                            }
                         }
                     }
 
@@ -155,6 +164,70 @@ async function startResultListener() {
             }
         } catch (error) {
             logger.error('Error processing result:', error);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+
+// 4. Listen to Dkron output (Dkron Stream -> Agent Input)
+async function startDkronListener() {
+    logger.info(`Starting Dkron listener on ${config.dkron_out} (group: ${config.dkronConsumerGroup})...`);
+
+    // Ensure consumer group exists
+    try {
+        await redisDkronConsumer.xgroup('CREATE', config.dkron_out, config.dkronConsumerGroup, '$', 'MKSTREAM');
+        logger.info(`Dkron Consumer group ${config.dkronConsumerGroup} created`);
+    } catch (err: any) {
+        if (err.message.includes('BUSYGROUP')) {
+            // Group already exists
+        } else {
+            logger.error('Error creating Dkron consumer group:', err);
+        }
+    }
+
+    while (true) {
+        try {
+            const result = await (redisDkronConsumer as any).xreadgroup(
+                'GROUP', config.dkronConsumerGroup, config.dkronConsumerName,
+                'COUNT', 1, 'BLOCK', 0, 'STREAMS', config.dkron_out, '>'
+            );
+
+            if (result && result.length > 0) {
+                const [streamName, messages] = result[0];
+                for (const [id, fields] of messages) {
+                    // fields is [ 'data', '{"job":...}' ]
+                    const dataIndex = fields.indexOf('data');
+                    if (dataIndex === -1) continue;
+
+                    const rawMessage = fields[dataIndex + 1];
+                    logger.info(`Received Dkron message ${id} from ${streamName}: ${rawMessage}`);
+
+                    try {
+                        const dkronMsg = JSON.parse(rawMessage);
+
+                        // Construct WorkerTask for Agent
+                        // Source: 'dkron'
+                        // Prompt: Descriptive text about the job execution
+                        const task: WorkerTask = {
+                            id: `dkron:${dkronMsg.job}:${id}`, // Synthesize an ID
+                            source: 'dkron',
+                            prompt: `Please summarize the Following Dkron job execution status with user perference language:\n\n${JSON.stringify(dkronMsg, null, 2)}`,
+                            metadata: dkronMsg
+                        };
+
+                        logger.info(`Forwarding Dkron event to ${config.agent_in}: ${(task.prompt || '').split('\n')[0]}`);
+                        await redisProducer.xadd(config.agent_in, '*', 'payload', JSON.stringify(task));
+
+                    } catch (parseErr) {
+                        logger.error('Error parsing Dkron message:', parseErr);
+                    }
+
+                    // Acknowledge
+                    await redisDkronConsumer.xack(config.dkron_out, config.dkronConsumerGroup, id);
+                }
+            }
+        } catch (error) {
+            logger.error('Error processing Dkron result:', error);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
@@ -180,11 +253,13 @@ async function main() {
         logger.info('TG Bot launched successfully');
 
         startResultListener();
+        startDkronListener(); // <--- Start Dkron listener
 
         const stop = () => {
             bot.stop();
             redisProducer.disconnect();
             redisConsumer.disconnect();
+            redisDkronConsumer.disconnect(); // <--- Disconnect
             process.exit(0);
         };
         process.once('SIGINT', stop);

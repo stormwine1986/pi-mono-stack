@@ -184,7 +184,7 @@ switch (command) {
             displayname: displayname || undefined,
             executor: 'shell',
             executor_config: {
-                command: `dkron-wrapper "${cmd.replace(/"/g, '\\"')}"`
+                command: `/bin/sh -c 'ENV_JOB_DESCRIPTION="${(displayname || '').replace(/'/g, "'\\''")}" dkron-wrapper "${cmd.replace(/'/g, "'\\''")}"'`
             },
             starts_at: starts_at || undefined,
             ephemeral: once || undefined

@@ -77,12 +77,14 @@ func pushToRedis(exitCode int, output string) {
 	if jobName == "" {
 		jobName = "unknown" // Fallback
 	}
+	description := os.Getenv("ENV_JOB_DESCRIPTION")
 
 	payload := map[string]interface{}{
-		"job":       jobName,
-		"exit_code": exitCode,
-		"output":    output,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"job":         jobName,
+		"description": description,
+		"exit_code":   exitCode,
+		"output":      output,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 	}
 
 	jsonBytes, _ := json.Marshal(payload)
