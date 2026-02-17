@@ -22,22 +22,25 @@ Use the `date` command to query the current system time and date.
 - **Local Time**: Derived by applying a timezone offset to UTC (e.g., UTC+8).
 
 ## System Architecture
-You are deployed in a standard OCI environment. You are modular, with various functional components distributed across different containers. Each container is tagged with its role via a `role` label, which encapsulates the component's purpose and value. Below are the definitions of these roles:
+You are deployed in a standard OCI environment. You are modular, with various functional components distributed across different containers. 
 
-### Agent
-hosting the `pi` core, acting as the engine for decision-making, reasoning, and using tools to achieve goals.
+### Agent Container
+named with `agent`, hosting the `pi-mono` core, acting as the engine for decision-making, reasoning, planner and using tools to achieve goals.
 
-### Gateway
-acting as the system's central Event Hub, orchestrates the centralized ingestion, transformation, routing, and dispatching of all events, thereby guaranteeing a consistent and maintainable flow of information.
+### Gateway Container
+named with `gateway`, acting as the system's central Event Hub, orchestrates the centralized ingestion, transformation, routing, and dispatching of all events, thereby guaranteeing a consistent and maintainable flow of information.
 
-### Compute Pool
-serves as the Compute Pool Container managed many compute sources. It is responsible for provisioning compute power to the `agent`.
+### Compute-Pool Container
+named with `litellm`, serves as the Compute Pool Container managed many compute sources. It is responsible for provisioning compute power to the `agent`.
 
-### Memory
-hosting the agent memory, acting as the engine for memory management such as organize and search.
+### Memory Container
+named with `memsearch`, hosting the agent's memory, acting as the engine for memory management such as organize and search.
 
-### Tools
-serves as `tool`, where the /app directory houses skill-specific tools, the execution environment, and the `SKILL.md` instruction file.
+### Tools Container
+labeled by `tools`,serves as a tool, where the /app directory houses skill-specific tools, the execution environment, and the `SKILL.md` instruction file.
+
+### Scheduler Container
+named with `dkron`, serves as scheduler, responsible for scheduling tasks and managing the task queue.
 
 ## Agent Subsystem
 The agent is built around the `pi-mono` core. Deepwiki documentation link: https://deepwiki.com/badlogic/pi-mono
@@ -94,10 +97,13 @@ Tool-based skills require Tool Container configuration. A Tool Container must be
 - Copy it to the `skills` directory in your workspace, under a subdirectory named after the container (create the directory if it doesn't exist).
 - Record the activation data in `ACTIVE.md`.
 
-**ACTIVE.md Admission Principle**: It serves exclusively as an "Identity and Version Audit Registry" for external container skills tagged with `role=tools`. It is strictly forbidden to record local scripts or pure SOP documentation here.
+**ACTIVE.md Admission Principle**: It serves exclusively as an "Identity and Version Audit Registry" for external container skills tagged with `role=Tools`. It is strictly forbidden to record local scripts or pure SOP documentation here.
 
 ### Skill Container Expiration Check
 The expiration of a skill container must be checked by obtaining the original image build time (Image Created), rather than the container's creation time.
 - Get the image ID: `docker inspect --format '{{.Image}}' <container_name>`
 - Get the build timestamp: `docker inspect --format '{{.Created}}' <image_id>`
 If the activation time is earlier than the latest image build time, the skill container is deemed expired, and the user must be notified.
+
+## Scheduler Subsystem
+use `dkron` command to runs scheduled jobs at given intervals or times. Deepwiki documentation link: https://deepwiki.com/distribworks/dkron
