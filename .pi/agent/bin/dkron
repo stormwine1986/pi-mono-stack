@@ -180,17 +180,17 @@ switch (command) {
 
         const jobData = {
             name,
-            schedule: once ? "@manually" : schedule,
+            schedule: once ? (starts_at ? `@at ${starts_at}` : "@manually") : schedule,
             displayname: displayname || undefined,
             executor: 'shell',
             executor_config: {
                 command: `/bin/sh -c 'ENV_JOB_DESCRIPTION="${(displayname || '').replace(/'/g, "'\\''")}" dkron-wrapper "${cmd.replace(/'/g, "'\\''")}"'`
             },
-            starts_at: starts_at || undefined,
+            starts_at: (once && starts_at) ? undefined : (starts_at || undefined),
             ephemeral: once || undefined
         };
 
-        const path = once ? '/jobs?runoncreate=true' : '/jobs';
+        const path = (once && !starts_at) ? '/jobs?runoncreate=true' : '/jobs';
         const res = await callDkron(path, 'POST', jobData);
         console.log(JSON.stringify(res, null, 2));
         break;
