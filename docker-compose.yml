@@ -70,13 +70,15 @@ services:
     restart: unless-stopped
 
   dkron:
-    image: dkron/dkron:latest
+    build:
+      context: dkron
+      dockerfile: Dockerfile
+      network: host
     container_name: dkron
-    command: agent --server --log-level=debug --bootstrap-expect=1
     environment:
-      - GODEBUG=netdns=go
+      - REDIS_URL=redis://127.0.0.1:6379
     volumes:
-      - dkron_data:/dkron
+      - ./.pi/agent/workspace/.dkron:/dkron.data:rw
     network_mode: host
     restart: unless-stopped
     depends_on:
@@ -84,4 +86,3 @@ services:
 
 volumes:
   redis_data:
-  dkron_data:
