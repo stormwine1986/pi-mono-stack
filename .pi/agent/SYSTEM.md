@@ -106,4 +106,6 @@ The expiration of a skill container must be checked by obtaining the original im
 If the activation time is earlier than the latest image build time, the skill container is deemed expired, and the user must be notified.
 
 ## Scheduler Subsystem
+The scheduled task subsystem is based on dkron. Deepwiki documentation link: https://deepwiki.com/distribworks/dkron
 run `dkron` command with `bash` to runs scheduled jobs at given intervals or times. Help Document: `dkron --help`
+Long-running tasks must be executed as scheduled jobs to avoid blocking the Agent Loop.
