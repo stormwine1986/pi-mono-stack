@@ -106,7 +106,7 @@ services:
   tavily:
     build:
       context: tavily
-      dockerfile: Dockerfile.tavily
+      dockerfile: Dockerfile
       network: host
     container_name: tavily
     environment:
