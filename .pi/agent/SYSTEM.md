@@ -108,11 +108,9 @@ If the activation time is earlier than the latest image build time, the skill co
 ## Scheduler Subsystem
 The scheduled task subsystem is based on dkron. Deepwiki documentation link: https://deepwiki.com/distribworks/dkron
 run `dkron` command to create scheduled jobs at given intervals or times. Help Document: `dkron --help`
+shell scripts used by `scheduler` is located at `workspace/.scheduler/` 
 
 ### When to use scheduler
-- When you need to execute time-consuming tasks (e.g., build commands, download/upload, sync), create a one-time task for the `scheduler` container rather than executing it in the current container.
-- When you need to execute periodic tasks (e.g., scheduled commands), create a recurring task for the `scheduler` container.
-- When you need to schedule a Todo for yourself, create a scheduled task to remind yourself at the due time.
-- When a user asks for a future reminder, create a scheduled task to notify the user at the specified time.
-- Keep your task update as concise as possible.
-- For reminders, output the reminder content directly; for background command data, report the execution status directly.
+- When you need to execute time-consuming tasks (e.g., build commands, download/upload, sync), create a one-time task to run it.
+- When you need to execute periodic tasks (e.g., scheduled commands), create a recurring task to run it.
+- When you need to schedule a Todo task, create a scheduled task to remind yourself at the due time.

@@ -1,5 +1,4 @@
 import { Telegraf } from 'telegraf';
-import { WorkerResponse } from 'pi-protocol';
 import { logger } from '../logger.js';
 
 // Helper to sanitize and format message content for Telegram HTML parse mode
@@ -50,39 +49,16 @@ export function formatToTelegramHtml(text: string): string {
 export class TelegramSender {
     constructor(private bot: Telegraf) { }
 
-    async sendResponse(chatId: number, messageId: number, response: WorkerResponse) {
-        if (response.status === 'success') {
-            try {
-                const htmlContent = formatToTelegramHtml(response.response);
-                await this.bot.telegram.sendMessage(chatId, htmlContent, {
-                    parse_mode: 'HTML',
-                    reply_parameters: { message_id: messageId },
-                });
-            } catch (err) {
-                logger.error('Failed to send HTML message, falling back to plain text:', err);
-                await this.bot.telegram.sendMessage(chatId, response.response, {
-                    reply_parameters: { message_id: messageId },
-                });
-            }
-        } else if (response.status === 'error') {
-            // Escape for MarkdownV2 just in case, but here we use simple formatting
-            const escapedError = response.error.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1');
-            await this.bot.telegram.sendMessage(chatId, `❌ *Error*: \`${escapedError}\``, {
-                parse_mode: 'MarkdownV2',
-                reply_parameters: { message_id: messageId },
-            });
-        } else if (response.status === 'progress') {
-            await this.bot.telegram.sendChatAction(chatId, 'typing');
-        }
-    }
-
-    async sendAdminMessage(adminId: number, title: string, content: string, isError: boolean = false) {
-        // Use the robust formatter for admin notifications as well
-        const emoji = isError ? '❌' : '🔔';
+    async sendAdminMessage(adminId: number, content: string) {
         const formattedContent = formatToTelegramHtml(content);
 
-        await this.bot.telegram.sendMessage(adminId, `${emoji} <b>${title}</b>\n\n${formattedContent}`, {
-            parse_mode: 'HTML'
-        });
+        try {
+            await this.bot.telegram.sendMessage(adminId, formattedContent, {
+                parse_mode: 'HTML'
+            });
+        } catch (err) {
+            logger.error('Failed to send HTML message, falling back to plain text:', err);
+            await this.bot.telegram.sendMessage(adminId, content);
+        }
     }
 }

@@ -39,7 +39,7 @@ services:
     environment:
       - TELEGRAM_TOKEN
       - REDIS_URL=redis://127.0.0.1:6379
-      - ALLOWED_USER_IDS=7722403902
+      - TG_ADMIN_ID=7722403902
 
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.81.9-nightly
@@ -79,6 +79,7 @@ services:
       - REDIS_URL=redis://127.0.0.1:6379
     volumes:
       - ./.pi/agent/workspace/.dkron:/dkron.data:rw
+      - ./.pi/agent/workspace/.scheduler:/home/pi-mono/.pi/agent/workspace/.scheduler:rw
       - /var/run/docker.sock:/var/run/docker.sock
     network_mode: host
     restart: unless-stopped

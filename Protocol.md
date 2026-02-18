@@ -17,12 +17,13 @@ Represents a task or prompt sent to the Agent for processing.
 **Format (JSON):**
 ```json
 {
-  "id": "string",            // Unique task identifier. 
-                             // - Telegram: "chatId:messageId"
-                             // - Dkron: "dkron:jobName:redisMsgId" (where redisMsgId is the ID assigned by dkron_out stream)
+  "id": "string",            // Unique task identifier (nanoId)
   "source": "string",        // Source of the request ("telegram", "dkron")
   "prompt": "string",        // User prompt or command text
-  "metadata": { ... }        // Optional metadata from the source (e.g., dkron execution results)
+  "metadata": {              // Source-specific routing info
+    "telegram": "chatId:messageId",   // Present when source is "telegram"
+    "dkron": { ... }                  // Present when source is "dkron", contains job execution data
+  }
 }
 ```
 

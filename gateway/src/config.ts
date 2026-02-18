@@ -9,7 +9,5 @@ export const config = {
     tgConsumerName: 'bot-1',
     dkronConsumerGroup: 'gateway-dkron',
     dkronConsumerName: 'gateway-1',
-    allowedUserIds: process.env.ALLOWED_USER_IDS
-        ? process.env.ALLOWED_USER_IDS.toString().split(',').map(id => parseInt(id.trim()))
-        : [],
+    adminId: parseInt(process.env.TG_ADMIN_ID || '0'),
 };

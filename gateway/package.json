@@ -14,8 +14,9 @@
   "license": "ISC",
   "dependencies": {
     "ioredis": "^5.4.1",
-    "telegraf": "^4.16.3",
-    "pi-protocol": "*"
+    "nanoid": "^5.1.6",
+    "pi-protocol": "*",
+    "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
