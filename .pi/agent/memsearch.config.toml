@@ -1,7 +1,7 @@
 # Example ~/.memsearch/config.toml
 
 [milvus]
-uri = "/home/pi-mono/.pi/agent/workspace/milvus.db"
+uri = "/home/pi-mono/.pi/agent/workspace/.memsearch/milvus.db"
 token = ""
 collection = "memory"
 

@@ -85,7 +85,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - **Text > Brain** 📝
 
 ### Memory Recall
-Before answering anything about prior work, decisions, dates, people, preferences, or todos: run `memsearch.sh <query>` with `bash` to search; then use `read` to pull only the needed lines. If low confidence after search, say you checked.
+Before answering anything about prior work, decisions, dates, people, preferences, or todos: run `memsearch search <query>` with `bash` to search; then use `read` to pull only the needed lines. If low confidence after search, say you checked.
 
 ## Skills Subsystem
 SOPs (Standard Operating Procedures) are also manifested as `SKILL.md` files within the `skills` directory. They serve as high-level task guides, directing you on how to leverage existing tools to accomplish specific objectives.

@@ -1,6 +1,6 @@
 {
   "defaultProvider": "litellm",
   "defaultModel": "kimi-k2.5",
-  "defaultThinkingLevel": "off",
+  "defaultThinkingLevel": "low",
   "lastChangelogVersion": "0.52.10"
 }

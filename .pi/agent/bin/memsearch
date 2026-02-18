@@ -1,0 +1,34 @@
+#!/bin/bash
+# If user provided "search" as first arg, remove it since we force it below
+show_help() {
+    echo "Usage: memsearch <search|stats> [args]"
+    echo ""
+    echo "Actions:"
+    echo "  search <query>  Search the memory database."
+    echo "  stats           Show index statistics."
+}
+
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    show_help
+    exit 0
+fi
+
+do_search() {
+    docker exec memsearch memsearch index /home/pi-mono/.pi/agent/workspace/memory > /dev/null 2>&1
+    exec docker exec memsearch memsearch search "$@" -j
+}
+
+case "$1" in
+    search)
+        shift
+        do_search "$@"
+        ;;
+    stats)
+        shift
+        exec docker exec memsearch memsearch stats "$@"
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac

@@ -38,6 +38,12 @@ cmd_build() {
   echo "✅ Build complete."
 }
 
+cmd_down() {
+  echo "🛑 Stopping stack …"
+  docker compose -f "${SCRIPT_DIR}/docker-compose.yml" down "$@"
+  echo "✅ Stack is down."
+}
+
 # ---------- usage ----------
 usage() {
   cat <<EOF
@@ -45,6 +51,7 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
   up      Load secrets from pass and start all services (docker compose up -d)
+  down    Stop and remove containers, networks (docker compose down)
   build   Build or rebuild services
   logs    Follow service logs (docker compose logs -f)
 
@@ -61,6 +68,7 @@ COMMAND="$1"; shift
 
 case "$COMMAND" in
   up)     cmd_up "$@" ;;
+  down)   cmd_down "$@" ;;
   build)  cmd_build "$@" ;;
   logs)   cmd_logs "$@" ;;
   *)      echo "❌ Unknown command: $COMMAND"; usage ;;
