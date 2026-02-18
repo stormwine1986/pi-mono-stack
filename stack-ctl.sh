@@ -31,6 +31,12 @@ cmd_logs() {
   docker compose -f "${SCRIPT_DIR}/docker-compose.yml" logs -f "$@"
 }
 
+cmd_build() {
+  echo "🏗️ Building stack …"
+  docker compose -f "${SCRIPT_DIR}/docker-compose.yml" build "$@"
+  echo "✅ Build complete."
+}
+
 # ---------- usage ----------
 usage() {
   cat <<EOF
@@ -38,6 +44,7 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
   up      Load secrets from pass and start all services (docker compose up -d)
+  build   Build or rebuild services
   logs    Follow service logs (docker compose logs -f)
 
 EOF
@@ -53,6 +60,7 @@ COMMAND="$1"; shift
 
 case "$COMMAND" in
   up)     cmd_up "$@" ;;
+  build)  cmd_build "$@" ;;
   logs)   cmd_logs "$@" ;;
   *)      echo "❌ Unknown command: $COMMAND"; usage ;;
 esac

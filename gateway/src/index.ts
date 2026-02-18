@@ -2,24 +2,14 @@ import { Telegraf } from 'telegraf';
 import { Redis } from 'ioredis';
 import { config } from './config.js';
 import { WorkerTask, WorkerControlSignal, WorkerResponse } from 'pi-protocol';
+import { TelegramSender } from './telegram/sender.js';
+import { logger } from './logger.js';
 
 const bot = new Telegraf(config.telegramToken);
+const sender = new TelegramSender(bot);
 const redisProducer = new Redis(config.redisUrl);
 const redisConsumer = new Redis(config.redisUrl);
 const redisDkronConsumer = new Redis(config.redisUrl);
-
-function getTimestamp() {
-    const now = new Date();
-    const pad = (n: number, l = 2) => n.toString().padStart(l, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
-        `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
-}
-
-const logger = {
-    info: (msg: string, ...args: any[]) => console.log(`[${getTimestamp()}] [INFO] ${msg}`, ...args),
-    warn: (msg: string, ...args: any[]) => console.warn(`[${getTimestamp()}] [WARN] ${msg}`, ...args),
-    error: (msg: string, ...args: any[]) => console.error(`[${getTimestamp()}] [ERROR] ${msg}`, ...args),
-};
 
 // Middleware for authorization
 bot.use(async (ctx, next) => {
@@ -135,14 +125,8 @@ async function startResultListener() {
                     if (response.id) {
                         const tgInfo = parseTaskId(response.id);
                         if (tgInfo) {
-                            if (response.status === 'success') {
-                                await bot.telegram.sendMessage(tgInfo.chatId, response.response, {
-                                    reply_parameters: { message_id: tgInfo.messageId },
-                                });
-                            } else if (response.status === 'error') {
-                                await bot.telegram.sendMessage(tgInfo.chatId, `❌ Error: ${response.error}`, {
-                                    reply_parameters: { message_id: tgInfo.messageId },
-                                });
+                            if (response.status === 'success' || response.status === 'error') {
+                                await sender.sendResponse(tgInfo.chatId, tgInfo.messageId, response);
                             } else if (response.status === 'progress') {
                                 await bot.telegram.sendChatAction(tgInfo.chatId, 'typing');
                                 logger.info(`Progress: ${response.event} for taskId ${response.id}`);
@@ -151,9 +135,9 @@ async function startResultListener() {
                             // Forward Dkron responses to the first allowed user (Admin)
                             const adminId = config.allowedUserIds[0];
                             if (response.status === 'success') {
-                                await bot.telegram.sendMessage(adminId, `🔔 <b>Dkron Task Update</b>\n\n${response.response}`, { parse_mode: 'HTML' });
+                                await sender.sendAdminMessage(adminId, 'Dkron Task Update', response.response, false);
                             } else if (response.status === 'error') {
-                                await bot.telegram.sendMessage(adminId, `❌ <b>Dkron Task Error</b>\n\n${response.error}`, { parse_mode: 'HTML' });
+                                await sender.sendAdminMessage(adminId, 'Dkron Task Error', response.error, true);
                             }
                         }
                     }
