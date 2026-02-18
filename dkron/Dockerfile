@@ -23,6 +23,9 @@ COPY --from=builder /app/dkron-wrapper /usr/local/bin/
 # Set Permissions
 RUN chmod +x /usr/local/bin/dkron-wrapper
 
+# Install dependencies: curl, docker-cli
+RUN apk add --no-cache curl docker-cli
+
 # Set Environment Variables
 ENV GODEBUG=netdns=go
 

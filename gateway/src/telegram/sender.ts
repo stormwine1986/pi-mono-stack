@@ -77,12 +77,9 @@ export class TelegramSender {
     }
 
     async sendAdminMessage(adminId: number, title: string, content: string, isError: boolean = false) {
-        // Simple wrapper for admin notifications (like Dkron)
+        // Use the robust formatter for admin notifications as well
         const emoji = isError ? '❌' : '🔔';
-        const formattedContent = content
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        const formattedContent = formatToTelegramHtml(content);
 
         await this.bot.telegram.sendMessage(adminId, `${emoji} <b>${title}</b>\n\n${formattedContent}`, {
             parse_mode: 'HTML'

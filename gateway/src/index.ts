@@ -195,7 +195,7 @@ async function startDkronListener() {
                         const task: WorkerTask = {
                             id: `dkron:${dkronMsg.job}:${id}`, // Synthesize an ID
                             source: 'dkron',
-                            prompt: `Please summarize the Following Dkron job execution status with user perference language:\n\n${JSON.stringify(dkronMsg, null, 2)}`,
+                            prompt: `Received an event from the scheduler subsystem:\n\n${JSON.stringify(dkronMsg, null, 2)}\n\nPlease analyze the event and take appropriate action.`,
                             metadata: dkronMsg
                         };
 

@@ -79,6 +79,7 @@ services:
       - REDIS_URL=redis://127.0.0.1:6379
     volumes:
       - ./.pi/agent/workspace/.dkron:/dkron.data:rw
+      - /var/run/docker.sock:/var/run/docker.sock
     network_mode: host
     restart: unless-stopped
     depends_on:

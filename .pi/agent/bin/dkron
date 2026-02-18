@@ -35,10 +35,9 @@ Options for jobs:
 Options for create-job:
   --name <name>          Name for the job (required)
   --displayname <desc>   Nice name for the job (description)
-  --schedule <cron>      Cron expression for the job (ignored if --once is used)
+  --schedule <expr>      Cron expression or "@at <ISO8601>" or "@every <duration>" (required unless --once without time)
   --command <cmd>        Command to execute (required)
-  --starts_at <iso>      Job start time (ISO 8601)
-  --once                 Create a one-time job that runs immediately and is deleted after
+  --once                 One-time job, deleted after execution
 
 Options for executions:
   --last                 Show only the most recent execution (including running)
@@ -47,20 +46,20 @@ Example:
   # Periodic job (every 1 minute)
   dkron create-job --name periodic-job --schedule "@every 1m" --command "echo periodic"
 
-  # Immediate one-time job (deleted after run)
+  # Immediate one-time job (run now, deleted after)
   dkron create-job --name quick-task --command "echo hello" --once
 
-  # Future one-time job (UTC time)
+  # Future one-time job (UTC time, deleted after)
   dkron create-job --name future-task --schedule "@at 2026-12-31T23:59:00Z" --command "echo year-end" --once
 
-  # 4. Query jobs scheduled for today
+  # Query jobs scheduled for today
   dkron jobs --today
 
-  # 5. Find a specific job by name or keyword
+  # Find a specific job by name or keyword
   dkron jobs --name test-job
   dkron jobs --query "backup"
 
-  # 6. Check the most recent execution of a job (including logs)
+  # Check the most recent execution of a job (including logs)
   dkron executions test-job --last
 
   dkron status
@@ -170,27 +169,43 @@ switch (command) {
         const schedule = getFlag('schedule');
         const cmd = getFlag('command');
         const displayname = getFlag('displayname');
-        const starts_at = getFlag('starts_at');
         const once = hasFlag('once');
 
         if (!name || (!schedule && !once) || !cmd) {
-            console.error('Error: --name, --schedule (unless --once), and --command are required for create-job');
+            console.error('Error: --name, --command, and --schedule (unless --once) are required');
             process.exit(1);
+        }
+
+        // Schedule logic:
+        //   --once + --schedule  → future one-time (e.g. "@at 2026-...")
+        //   --once (no schedule) → immediate one-time ("@manually" + runoncreate)
+        //   no --once            → periodic (use schedule as-is)
+        let effectiveSchedule;
+        let runOnCreate = false;
+
+        if (once) {
+            if (schedule) {
+                effectiveSchedule = schedule;
+            } else {
+                effectiveSchedule = '@manually';
+                runOnCreate = true;
+            }
+        } else {
+            effectiveSchedule = schedule;
         }
 
         const jobData = {
             name,
-            schedule: once ? (starts_at ? `@at ${starts_at}` : "@manually") : schedule,
+            schedule: effectiveSchedule,
             displayname: displayname || undefined,
             executor: 'shell',
             executor_config: {
                 command: `/bin/sh -c 'ENV_JOB_DESCRIPTION="${(displayname || '').replace(/'/g, "'\\''")}" dkron-wrapper "${cmd.replace(/'/g, "'\\''")}"'`
             },
-            starts_at: (once && starts_at) ? undefined : (starts_at || undefined),
             ephemeral: once || undefined
         };
 
-        const path = (once && !starts_at) ? '/jobs?runoncreate=true' : '/jobs';
+        const path = runOnCreate ? '/jobs?runoncreate=true' : '/jobs';
         const res = await callDkron(path, 'POST', jobData);
         console.log(JSON.stringify(res, null, 2));
         break;
