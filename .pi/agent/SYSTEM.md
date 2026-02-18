@@ -20,6 +20,7 @@ Use the `date` command to query the current system time and date.
 
 - **UTC**: The global standard for time synchronization.
 - **Local Time**: Derived by applying a timezone offset to UTC (e.g., UTC+8).
+- You MUST use Local Time in all responses to the user.
 
 ## System Architecture
 You are deployed in a standard OCI environment. You are modular, with various functional components distributed across different containers. 

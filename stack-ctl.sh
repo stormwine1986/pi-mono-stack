@@ -15,6 +15,7 @@ load_secrets() {
   export OPENROUTER_API_KEY="$(pass show OPENROUTER_API_KEY)"
   export LANGFUSE_SECRET_KEY="$(pass show LANGFUSE_SECRET_KEY)"
   export VOYAGE_API_KEY="$(pass show VOYAGE_API_KEY)"
+  export TAVILY_API_KEY="$(pass show TAVILY_API_KEY)"
   echo "✅ Secrets loaded."
 }
 
