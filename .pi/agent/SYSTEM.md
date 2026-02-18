@@ -109,8 +109,9 @@ If the activation time is earlier than the latest image build time, the skill co
 The scheduled task subsystem is based on dkron. Deepwiki documentation link: https://deepwiki.com/distribworks/dkron
 run `dkron` command to create scheduled jobs at given intervals or times. Help Document: `dkron --help`
 shell scripts used by `scheduler` is located at `workspace/.scheduler/` 
+when job finished, spawn a event push into `dkron_out`
 
 ### When to use scheduler
 - When you need to execute time-consuming tasks (e.g., build commands, download/upload, sync), create a one-time task to run it.
 - When you need to execute periodic tasks (e.g., scheduled commands), create a recurring task to run it.
-- When you need to schedule a Todo task, create a scheduled task to remind yourself at the due time.
+- When you need to schedule a Todo task, create a scheduled task to remind at the due time.(command `echo ...`)

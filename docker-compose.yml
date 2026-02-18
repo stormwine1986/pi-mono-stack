@@ -86,5 +86,22 @@ services:
     depends_on:
       - redis
 
+  browser-use:
+    build:
+      context: browser-use
+      dockerfile: Dockerfile
+      network: host
+    container_name: browser-use
+    environment:
+      - HOME=/home/pi-mono
+    volumes:
+      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace
+    user: "1000:1000"
+    working_dir: /home/pi-mono/.pi/agent/workspace
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   redis_data:
