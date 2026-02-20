@@ -143,5 +143,16 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  polymarket:
+    build:
+      context: polymarket
+      dockerfile: Dockerfile
+      network: host
+    container_name: polymarket
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   redis_data:
