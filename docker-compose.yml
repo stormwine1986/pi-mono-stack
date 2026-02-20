@@ -116,5 +116,21 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  github:
+    build:
+      context: github
+      dockerfile: Dockerfile
+      network: host
+    container_name: github
+    environment:
+      - GITHUB_TOKEN
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   redis_data:

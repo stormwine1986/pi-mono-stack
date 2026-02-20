@@ -16,6 +16,7 @@ load_secrets() {
   export LANGFUSE_SECRET_KEY="$(pass show LANGFUSE_SECRET_KEY)"
   export VOYAGE_API_KEY="$(pass show VOYAGE_API_KEY)"
   export TAVILY_API_KEY="$(pass show TAVILY_API_KEY)"
+  export GITHUB_TOKEN="$(pass show GITHUB_TOKEN)"
   echo "✅ Secrets loaded."
 }
 
