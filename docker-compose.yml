@@ -165,5 +165,18 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  twitter:
+    build:
+      context: twitter
+      dockerfile: Dockerfile
+      network: host
+    container_name: twitter
+    environment:
+      - TWITTERAPI_KEY
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   redis_data:

@@ -17,6 +17,7 @@ load_secrets() {
   export VOYAGE_API_KEY="$(pass show VOYAGE_API_KEY)"
   export TAVILY_API_KEY="$(pass show TAVILY_API_KEY)"
   export GITHUB_TOKEN="$(pass show GITHUB_TOKEN)"
+  export TWITTERAPI_KEY="$(pass show TWITTERAPI_KEY)"
   echo "✅ Secrets loaded."
 }
 
