@@ -154,5 +154,16 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  wikipedia:
+    build:
+      context: wikipedia
+      dockerfile: Dockerfile
+      network: host
+    container_name: wikipedia
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   redis_data:
