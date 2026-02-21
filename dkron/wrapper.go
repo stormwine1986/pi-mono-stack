@@ -38,8 +38,11 @@ func main() {
 		exitCode = 0
 	}
 
-	// Print output to container logs as well
-	os.Stdout.Write(output)
+	// Print output to container logs ONLY if the command failed
+	// Successful jobs will still have their output pushed to Redis for tracking
+	if exitCode != 0 {
+		os.Stdout.Write(output)
+	}
 
 	// Push execution result to Redis
 	pushToRedis(exitCode, string(output))
