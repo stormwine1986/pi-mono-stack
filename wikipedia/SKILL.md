@@ -1,6 +1,6 @@
 ---
-name: wikipedia
-description: Access Wikipedia and Wikidata to search for articles, entities, and structured data. Use this skill for general knowledge, factual verification, and deep data retrieval.
+name: "wikipedia"
+description: "Access Wikipedia and Wikidata to search for articles, entities, and structured data. Use this skill for general knowledge, factual verification, and deep data retrieval."
 ---
 
 # Wikipedia & Wikidata Skill

@@ -1,6 +1,6 @@
 ---
-name: tradingview
-description: Fetch real-time financial market data (stocks, bonds, currencies, commodities) using TradingView data via tvDatafeed. Use when the user asks for real-time data for global markets, key economic indicators (VIX, DXY, yields), or commodities.
+name: "tradingview"
+description: "Fetch real-time financial market data (stocks, bonds, currencies, commodities) using TradingView data via tvDatafeed. Use when the user asks for real-time data for global markets, key economic indicators (VIX, DXY, yields), or commodities."
 ---
 
 # TradingView Financial Data Skill

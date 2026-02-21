@@ -1,3 +1,8 @@
+---
+name: "polymarket"
+description: "Access Polymarket Gamma API to query prediction markets, search by keyword, and get detailed market metadata and prices."
+---
+
 # Polymarket Skill
 
 This skill provides access to the Polymarket Gamma API, allowing agents to query markets, search for specific prediction markets, and get detailed information about them.

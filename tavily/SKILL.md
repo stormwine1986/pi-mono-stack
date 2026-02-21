@@ -1,6 +1,6 @@
 ---
-name: tavily
-description: Web search and research tool powered by Tavily. Use when the user asks for real-time information, news, fact-checking, or broad web research.
+name: "tavily"
+description: "Web search and research tool powered by Tavily. Use when the user asks for real-time information, news, fact-checking, or broad web research."
 ---
 
 # Tavily Search Skill

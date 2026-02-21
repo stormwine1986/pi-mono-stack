@@ -1,6 +1,6 @@
-name: twitter
-description: Twitter/X data retrieval tool powered by twitterapi.io. Use to fetch user profiles and latest posts.
-role: Tools
+---
+name: "twitter"
+description: "Twitter/X data retrieval tool powered by twitterapi.io. Use to fetch user profiles and latest posts."
 ---
 
 # Twitter/X Skill (twapi)

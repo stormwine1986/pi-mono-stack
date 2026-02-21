@@ -1,6 +1,6 @@
 ---
-name: github
-description: Interact with GitHub (gh CLI), Git (clone, commit, pull, checkout, push, fetch), and Docker (docker build). Tips: specify --repo for gh, use /home/pi-mono/.pi/agent/workspace/.github for git operations, and ensure GITHUB_TOKEN is set.
+name: "github"
+description: "Interact with GitHub (gh CLI), Git (clone, commit, pull, checkout, push, fetch), and Docker (docker build). Tips: specify --repo for gh, use /home/pi-mono/.pi/agent/workspace/.github for git operations, and ensure GITHUB_TOKEN is set."
 ---
 
 # GitHub Skill
@@ -14,7 +14,6 @@ This skill provides access to GitHub's features via the `gh` CLI, standard `git`
 - **Docker Integration**: `docker build` images directly from within the container using the host's Docker daemon.
 - **Issue Tracking & PRs**: List, view, and manage GitHub issues and pull requests.
 - **API Access**: Direct GitHub API access via `gh api`.
-- **DeepWiki**: Access detailed design documentation for any public GitHub project via `https://deepwiki.com/<owner>/<repo>`.
 
 ## Usage
 
@@ -101,8 +100,3 @@ docker exec github gh pr view 123 --repo owner/repo
 ```bash
 docker exec github gh api repos/owner/repo/releases/latest --jq '.tag_name'
 ```
-
-### Browse Project Documentation via DeepWiki
-**User:** "I want to understand the architecture of the BerriAI/litellm project."
-**Action:**
-Access the DeepWiki page for the project: `https://deepwiki.com/BerriAI/litellm`
