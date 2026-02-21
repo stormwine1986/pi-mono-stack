@@ -1,0 +1,190 @@
+#!/bin/bash
+
+# Color codes
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+show_help() {
+    echo "Usage: compute <status> [args]"
+    echo ""
+    echo "Actions:"
+    echo "  status    Show compute subsystem status (LLM providers, requests, tokens, latency, errors)."
+}
+
+fetch_metrics() {
+    if command -v curl >/dev/null 2>&1; then
+        METRICS=$(curl -s -L http://localhost:4000/metrics)
+    else
+        METRICS=$(docker exec litellm python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/metrics/').read().decode())" 2>/dev/null)
+    fi
+
+    if [ -z "$METRICS" ]; then
+        echo -e "${RED}Error:${NC} Could not fetch metrics from LiteLLM (http://localhost:4000/metrics). Is LiteLLM running?"
+        exit 1
+    fi
+}
+
+do_status() {
+    fetch_metrics
+
+    PARSE_SCRIPT=$(cat <<'PYEOF'
+import sys
+import re
+from collections import defaultdict
+
+def is_hash(s):
+    """Check if a string looks like a hex hash (model_id)."""
+    return bool(re.match(r'^[0-9a-f]{20,}$', s))
+
+def resolve_model_name(labels):
+    """Pick the best human-readable model name from labels."""
+    candidates = [
+        labels.get('litellm_model_name', ''),
+        labels.get('requested_model', ''),
+        labels.get('model_group', ''),
+        labels.get('model', ''),
+    ]
+    for c in candidates:
+        if c and c != 'None' and not is_hash(c):
+            return c
+    return None
+
+def parse_metrics(data):
+    results = defaultdict(lambda: defaultdict(float))
+    pattern = re.compile(r'^([a-zA-Z_]+)(?:\{([^}]*)\})?\s+([\d\.e\+\-]+)$')
+
+    for line in data.split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        match = pattern.match(line)
+        if not match:
+            continue
+        mname, labels_str, value = match.groups()
+        try:
+            value = float(value)
+        except ValueError:
+            continue
+
+        if mname.endswith('_bucket') or mname.endswith('_created'):
+            continue
+
+        labels = {}
+        if labels_str:
+            for k, v in re.findall(r'([^,="]+)="([^"]*)"', labels_str):
+                labels[k] = v
+
+        model = resolve_model_name(labels) or 'global'
+        results[model][mname] += value
+
+    return results
+
+data = sys.stdin.read()
+results = parse_metrics(data)
+
+models_found = [m for m in results.keys() if m != 'global']
+
+# --- Overall system status ---
+total_reqs = sum(
+    results[m].get('litellm_deployment_total_requests_total', 0) or
+    results[m].get('litellm_proxy_total_requests_metric_total', 0)
+    for m in models_found
+)
+total_failed = sum(
+    results[m].get('litellm_deployment_failure_responses_total', 0) or
+    results[m].get('litellm_proxy_failed_requests_metric_total', 0)
+    for m in models_found
+)
+total_tokens = sum(results[m].get('litellm_total_tokens_metric_total', 0) for m in models_found)
+
+# Determine system-wide status
+any_outage = any(results[m].get('litellm_deployment_state', 0) >= 2.0 for m in models_found)
+any_partial = any(results[m].get('litellm_deployment_state', 0) >= 1.0 for m in models_found)
+high_err_rate = total_reqs > 0 and (total_failed / total_reqs) > 0.1
+
+if any_outage:
+    sys_status = "\033[0;31m● OUTAGE\033[0m"
+elif any_partial or high_err_rate:
+    sys_status = "\033[1;33m● DEGRADED\033[0m"
+elif len(models_found) == 0:
+    sys_status = "\033[0;33m● NO DATA\033[0m"
+else:
+    sys_status = "\033[0;32m● HEALTHY\033[0m"
+
+print()
+print(f"  \033[1;34mCompute Subsystem\033[0m  {sys_status}")
+print(f"  Models: {len(models_found)}  |  Reqs: {int(total_reqs)}  |  Tokens: {int(total_tokens)}  |  Errors: {int(total_failed)}")
+print()
+
+# --- Per-model table ---
+print(f"\033[1m  {'Model':<35} {'Reqs':>6}  {'Tokens':>10}  {'Lat(ms)':>8}  {'Err':>5}  {'State'}\033[0m")
+print(f"  {'─' * 80}")
+
+for model in sorted(models_found):
+    m = results[model]
+
+    reqs = int(
+        m.get('litellm_deployment_total_requests_total', 0) or
+        m.get('litellm_proxy_total_requests_metric_total', 0) or
+        m.get('litellm_requests_metric_total', 0)
+    )
+
+    tokens = int(m.get('litellm_total_tokens_metric_total', 0))
+    input_tok = int(m.get('litellm_input_tokens_metric_total', 0))
+    output_tok = int(m.get('litellm_output_tokens_metric_total', 0))
+    tok_display = f"{tokens}" if tokens else f"{input_tok}+{output_tok}"
+
+    failed = int(
+        m.get('litellm_deployment_failure_responses_total', 0) or
+        m.get('litellm_proxy_failed_requests_metric_total', 0)
+    )
+
+    lat_sum = m.get('litellm_request_total_latency_metric_sum', 0) or m.get('litellm_llm_api_latency_metric_sum', 0)
+    lat_count = m.get('litellm_request_total_latency_metric_count', 0) or m.get('litellm_llm_api_latency_metric_count', 0)
+    avg_lat = (lat_sum / lat_count * 1000) if lat_count > 0 else 0
+
+    state_val = m.get('litellm_deployment_state', 0)
+
+    if state_val >= 2.0:
+        state_icon = "\033[0;31m✗ Outage\033[0m"
+    elif state_val >= 1.0:
+        state_icon = "\033[1;33m▲ Partial\033[0m"
+    elif failed > 0 and reqs > 0 and (failed / reqs) > 0.1:
+        state_icon = "\033[0;33m▲ Degraded\033[0m"
+    else:
+        state_icon = "\033[0;32m✓ OK\033[0m"
+
+    lat_str = f"{avg_lat:.0f}" if avg_lat > 0 else "-"
+    print(f"  {model[:35]:<35} {reqs:>6}  {tok_display:>10}  {lat_str:>8}  {failed:>5}  {state_icon}")
+
+print()
+PYEOF
+)
+
+    if command -v python3 >/dev/null 2>&1; then
+        echo "$METRICS" | python3 -c "$PARSE_SCRIPT"
+    else
+        echo "$METRICS" | docker exec -i litellm python3 -c "$PARSE_SCRIPT"
+    fi
+}
+
+# --- Main ---
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    show_help
+    exit 0
+fi
+
+case "$1" in
+    status)
+        shift
+        do_status "$@"
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac
