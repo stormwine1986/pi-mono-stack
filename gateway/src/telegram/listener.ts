@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { Redis } from 'ioredis';
-import { WorkerResponse } from 'pi-protocol';
+import { WorkerResponse } from '../types.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { TelegramSender } from './sender.js';

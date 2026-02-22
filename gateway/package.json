@@ -15,7 +15,6 @@
   "dependencies": {
     "ioredis": "^5.4.1",
     "nanoid": "^5.1.6",
-    "pi-protocol": "*",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {

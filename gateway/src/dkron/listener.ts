@@ -1,6 +1,6 @@
 import { Redis } from 'ioredis';
 import { nanoid } from 'nanoid';
-import { WorkerTask } from 'pi-protocol';
+import { WorkerTask } from '../types.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 

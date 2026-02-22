@@ -2,7 +2,7 @@ import { Telegraf } from 'telegraf';
 import { Redis } from 'ioredis';
 import { nanoid } from 'nanoid';
 import { config } from './config.js';
-import { WorkerTask, WorkerControlSignal } from 'pi-protocol';
+import { WorkerTask, WorkerControlSignal } from './types.js';
 import { TelegramSender } from './telegram/sender.js';
 import { startResultListener } from './telegram/listener.js';
 import { startDkronListener } from './dkron/listener.js';
