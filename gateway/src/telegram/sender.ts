@@ -50,15 +50,70 @@ export class TelegramSender {
     constructor(private bot: Telegraf) { }
 
     async sendAdminMessage(adminId: number, content: string) {
-        const formattedContent = formatToTelegramHtml(content);
+        const MAX_LENGTH = 4000;
 
-        try {
-            await this.bot.telegram.sendMessage(adminId, formattedContent, {
-                parse_mode: 'HTML'
-            });
-        } catch (err) {
-            logger.error('Failed to send HTML message, falling back to plain text:', err);
-            await this.bot.telegram.sendMessage(adminId, content);
+        const sendChunk = async (text: string, isHtml: boolean = true) => {
+            try {
+                if (isHtml) {
+                    await this.bot.telegram.sendMessage(adminId, formatToTelegramHtml(text), {
+                        parse_mode: 'HTML'
+                    });
+                } else {
+                    await this.bot.telegram.sendMessage(adminId, text);
+                }
+            } catch (err: any) {
+                if (err.description?.includes('message is too long')) {
+                    // If even a chunk is too long (unlikely if split correctly), further split it
+                    const subChunks = this.simpleSplit(text, MAX_LENGTH);
+                    for (const sub of subChunks) {
+                        await this.bot.telegram.sendMessage(adminId, sub);
+                    }
+                } else if (isHtml) {
+                    logger.error('Failed to send HTML chunk, falling back to plain text:', err);
+                    await this.bot.telegram.sendMessage(adminId, text);
+                } else {
+                    logger.error('Failed to send plain text chunk:', err);
+                }
+            }
+        };
+
+        if (content.length <= MAX_LENGTH) {
+            await sendChunk(content);
+        } else {
+            const chunks = this.splitByRelevantNewlines(content, MAX_LENGTH);
+            for (const chunk of chunks) {
+                await sendChunk(chunk);
+            }
         }
+    }
+
+    private splitByRelevantNewlines(text: string, maxLength: number): string[] {
+        const chunks: string[] = [];
+        let remaining = text;
+
+        while (remaining.length > 0) {
+            if (remaining.length <= maxLength) {
+                chunks.push(remaining);
+                break;
+            }
+
+            let splitIndex = remaining.lastIndexOf('\n', maxLength);
+            if (splitIndex === -1) {
+                splitIndex = maxLength;
+            }
+
+            chunks.push(remaining.substring(0, splitIndex));
+            remaining = remaining.substring(splitIndex).trimStart();
+        }
+
+        return chunks;
+    }
+
+    private simpleSplit(text: string, maxLength: number): string[] {
+        const chunks: string[] = [];
+        for (let i = 0; i < text.length; i += maxLength) {
+            chunks.push(text.substring(i, i + maxLength));
+        }
+        return chunks;
     }
 }
