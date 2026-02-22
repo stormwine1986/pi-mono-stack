@@ -38,20 +38,18 @@ func main() {
 		exitCode = 0
 	}
 
-	// Print output to container logs ONLY if the command failed
-	// Successful jobs will still have their output pushed to Redis for tracking
-	if exitCode != 0 {
-		os.Stdout.Write(output)
-	}
+	// Print output to container logs
+	// This allows Dkron to capture the output in its execution history
+	os.Stdout.Write(output)
 
 	// Push execution result to Redis
-	pushToRedis(exitCode, string(output))
+	pushToRedis(exitCode)
 
 	// Propagate exit code
 	os.Exit(exitCode)
 }
 
-func pushToRedis(exitCode int, output string) {
+func pushToRedis(exitCode int) {
 	// Parse Redis URL
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
@@ -81,20 +79,21 @@ func pushToRedis(exitCode int, output string) {
 		jobName = "unknown" // Fallback
 	}
 	description := os.Getenv("ENV_JOB_DESCRIPTION")
+	owner := os.Getenv("ENV_JOB_OWNER")
 
 	payload := map[string]interface{}{
 		"job":         jobName,
 		"description": description,
+		"owner":       owner,
 		"exit_code":   exitCode,
-		"output":      output,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 	}
 
 	jsonBytes, _ := json.Marshal(payload)
 
-	// Push to stream 'dkron_out'
+	// Push to stream 'process_out'
 	xAddArgs := &redis.XAddArgs{
-		Stream: "dkron_out",
+		Stream: "process_out",
 		Values: map[string]interface{}{
 			"data": string(jsonBytes),
 		},

@@ -1,0 +1,130 @@
+#!/usr/bin/env node
+
+/**
+ * .pi/agent/bin/proc-ctl
+ * 
+ * 立即执行后台任务并管理日志的工具
+ */
+
+import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+
+const DKRON_PORT = 18047;
+const DKRON_URL = `http://127.0.0.1:${DKRON_PORT}/v1`;
+
+const args = process.argv.slice(2);
+
+// Help Text
+if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+    console.log(`
+Usage:
+  proc-ctl <displayname> <command>    立即启动一个后台任务
+  proc-ctl view <jobname>             查看指定任务的最近执行日志
+
+Examples:
+  proc-ctl "数据分析" "python3 analyze.py"
+  proc-ctl view process:k8w-h2x9n1
+    `);
+    process.exit(0);
+}
+
+async function callDkron(path, method = 'GET', data = null) {
+    const url = `${DKRON_URL}${path}`;
+    const curlArgs = ['-sS', '-X', method, url];
+
+    if (data) {
+        curlArgs.push('-H', 'Content-Type: application/json');
+        curlArgs.push('-d', JSON.stringify(data));
+    }
+
+    const result = spawnSync('curl', curlArgs, { encoding: 'utf8' });
+
+    if (result.status !== 0) {
+        console.error('Error calling Dkron API:', result.stderr);
+        process.exit(1);
+    }
+
+    if (!result.stdout) return null;
+    try {
+        return JSON.parse(result.stdout);
+    } catch (e) {
+        return result.stdout;
+    }
+}
+
+function generateNanoId(size = 10) {
+    const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
+    let id = '';
+    const bytes = randomBytes(size);
+    for (let i = 0; i < size; i++) {
+        id += alphabet[bytes[i] % alphabet.length];
+    }
+    return id;
+}
+
+async function main() {
+    const command = args[0];
+
+    // Case 1: View Logs
+    if (command === 'view') {
+        const jobId = args[1];
+        if (!jobId) {
+            console.error('Error: Job name is required. Usage: proc-ctl view <jobname>');
+            process.exit(1);
+        }
+
+        const executions = await callDkron(`/jobs/${jobId}/executions`);
+        if (executions && Array.isArray(executions) && executions.length > 0) {
+            // Sort to get the latest
+            executions.sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+            const last = executions[0];
+
+            console.log(`\nJob: ${jobId}`);
+            console.log(`Status: ${last.success ? '✅ Success' : '❌ Failed'}`);
+            console.log(`Time: ${last.started_at} -> ${last.finished_at || 'running'}`);
+            console.log(`---------------- Output ----------------`);
+            console.log(last.output || '(No output recorded)');
+            console.log(`----------------------------------------\n`);
+        } else {
+            console.log(`\nNo execution logs found for "${jobId}".`);
+            console.log(`Note: If the job was ephemeral, logs may be unavailable after it is deleted.\n`);
+        }
+        return;
+    }
+
+    // Case 2: Run Task (Default)
+    if (args.length < 2) {
+        console.error('Error: Missing arguments. Usage: proc-ctl <displayname> <command>');
+        process.exit(1);
+    }
+
+    const [displayname, cmd] = args;
+    const jobId = `${generateNanoId()}`;
+
+    const jobData = {
+        name: jobId,
+        displayname: displayname,
+        schedule: '@manually',
+        executor: 'shell',
+        executor_config: {
+            command: `/bin/sh -c 'ENV_JOB_DESCRIPTION="${displayname.replace(/'/g, "'\\''")}" ENV_JOB_OWNER="agent" processor "${cmd.replace(/'/g, "'\\''")}"'`
+        },
+        ephemeral: true
+    };
+
+    const res = await callDkron('/jobs?runoncreate=true', 'POST', jobData);
+
+    if (res && res.name) {
+        console.log(`[Success] Background task started.`);
+        console.log(`Job Name: ${res.name}`);
+        console.log(`Display Name: ${displayname}`);
+        console.log(`\nTip: You can view logs with: proc-ctl view ${res.name}`);
+    } else {
+        console.log(JSON.stringify(res, null, 2));
+    }
+}
+
+main().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+});

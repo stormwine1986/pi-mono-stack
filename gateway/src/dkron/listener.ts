@@ -3,22 +3,24 @@ import { nanoid } from 'nanoid';
 import { WorkerTask } from '../types.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { TelegramSender } from '../telegram/sender.js';
 
 export async function startDkronListener(
     redisProducer: Redis,
-    redisDkronConsumer: Redis
+    redisDkronConsumer: Redis,
+    sender: TelegramSender
 ) {
-    logger.info(`Starting Dkron listener on ${config.dkron_out} (group: ${config.dkronConsumerGroup})...`);
+    logger.info(`Starting Process listener on ${config.process_out} (group: ${config.dkronConsumerGroup})...`);
 
     // Ensure consumer group exists
     try {
-        await redisDkronConsumer.xgroup('CREATE', config.dkron_out, config.dkronConsumerGroup, '$', 'MKSTREAM');
-        logger.info(`Dkron Consumer group ${config.dkronConsumerGroup} created`);
+        await redisDkronConsumer.xgroup('CREATE', config.process_out, config.dkronConsumerGroup, '$', 'MKSTREAM');
+        logger.info(`Process Consumer group ${config.dkronConsumerGroup} created`);
     } catch (err: any) {
         if (err.message.includes('BUSYGROUP')) {
             // Group already exists
         } else {
-            logger.error('Error creating Dkron consumer group:', err);
+            logger.error('Error creating Process consumer group:', err);
         }
     }
 
@@ -26,7 +28,7 @@ export async function startDkronListener(
         try {
             const result = await (redisDkronConsumer as any).xreadgroup(
                 'GROUP', config.dkronConsumerGroup, config.dkronConsumerName,
-                'COUNT', 1, 'BLOCK', 0, 'STREAMS', config.dkron_out, '>'
+                'COUNT', 1, 'BLOCK', 0, 'STREAMS', config.process_out, '>'
             );
 
             if (result && result.length > 0) {
@@ -36,32 +38,30 @@ export async function startDkronListener(
                     if (dataIndex === -1) continue;
 
                     const rawMessage = fields[dataIndex + 1];
-                    logger.info(`Received Dkron message ${id} from ${streamName}: ${rawMessage}`);
+                    logger.info(`Received Process message ${id} from ${streamName}: ${rawMessage}`);
 
                     try {
                         const dkronMsg = JSON.parse(rawMessage);
 
-                        const taskId = nanoid();
-                        const task: WorkerTask = {
-                            id: taskId,
-                            source: 'dkron',
-                            prompt: `Received an event from the \`scheduler\`:\n\n${JSON.stringify(dkronMsg, null, 2)}\n\nIf this is a reminder for a Todo task, complete it as requested. If a background task has finished, analyze the output and provide a summary of the execution results.`,
-                            metadata: { dkron: dkronMsg }
-                        };
-
-                        logger.info(`Forwarding Dkron event to ${config.agent_in}: ${(task.prompt || '').split('\n')[0]}`);
-                        await redisProducer.xadd(config.agent_in, '*', 'payload', JSON.stringify(task));
+                        // Notify user via Telegram
+                        if (config.adminId) {
+                            const jobName = dkronMsg.job || 'Unknown';
+                            const description = dkronMsg.description || 'No description';
+                            const exitCode = dkronMsg.exit_code;
+                            const notification = `任务 \`${jobName}\` - \`${description}\` 已经完成，exit_code = ${exitCode}`;
+                            await sender.sendAdminMessage(config.adminId, notification);
+                        }
 
                     } catch (parseErr) {
-                        logger.error('Error parsing Dkron message:', parseErr);
+                        logger.error('Error parsing Process message:', parseErr);
                     }
 
                     // Acknowledge
-                    await redisDkronConsumer.xack(config.dkron_out, config.dkronConsumerGroup, id);
+                    await redisDkronConsumer.xack(config.process_out, config.dkronConsumerGroup, id);
                 }
             }
         } catch (error) {
-            logger.error('Error processing Dkron result:', error);
+            logger.error('Error processing Process result:', error);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }

@@ -1,4 +1,4 @@
-module dkron-wrapper
+module processor
 
 go 1.20
 

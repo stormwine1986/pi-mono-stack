@@ -3,25 +3,25 @@ FROM golang:1.21-alpine AS builder
 WORKDIR /app
 
 # Copy source code first
-COPY wrapper.go .
+COPY processor.go .
 
 # Init module and tidy dependencies
-# wrapper.go imports redis, so tidy will fetch it
-RUN go mod init dkron-wrapper && \
+# processor.go imports redis, so tidy will fetch it
+RUN go mod init processor && \
     go mod tidy
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o dkron-wrapper .
+RUN CGO_ENABLED=0 GOOS=linux go build -o processor .
 
 
 # Final Stage: Dkron Image
 FROM dkron/dkron:latest
 
 # Copy binary from builder
-COPY --from=builder /app/dkron-wrapper /usr/local/bin/
+COPY --from=builder /app/processor /usr/local/bin/
 
 # Set Permissions
-RUN chmod +x /usr/local/bin/dkron-wrapper
+RUN chmod +x /usr/local/bin/processor
 
 # Install dependencies: curl, docker-cli
 RUN apk add --no-cache curl docker-cli

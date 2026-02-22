@@ -89,7 +89,7 @@ async function main() {
         logger.info('TG Bot launched successfully');
 
         startResultListener(bot, sender, redisConsumer);
-        startDkronListener(redisProducer, redisDkronConsumer);
+        startDkronListener(redisProducer, redisDkronConsumer, sender);
 
         const stop = () => {
             bot.stop();

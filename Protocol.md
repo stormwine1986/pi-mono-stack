@@ -60,8 +60,8 @@ Control signals to manage the Agent's lifecycle or current operation.
 }
 ```
 
-### 4. Dkron Output (`dkron_out`)
-Stream: `dkron_out` (Redis Stream)
+### 4. Process Output (`process_out`)
+Stream: `process_out` (Redis Stream)
 Direction: Dkron -> Gateway
 
 Stream of job execution results from Dkron tasks.
@@ -71,8 +71,8 @@ Stream of job execution results from Dkron tasks.
 {
   "job": "string",           // Job name (e.g., "backup-task")
   "description": "string",   // Job description or display name
+  "owner": "string",         // Job owner identifier
   "exit_code": number,       // Exit code (0 for success)
-  "output": "string",        // Combined stdout and stderr of the command
   "timestamp": "ISO-8601"    // Execution timestamp (UTC)
 }
 ```
