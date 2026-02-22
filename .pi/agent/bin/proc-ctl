@@ -107,7 +107,7 @@ async function main() {
         schedule: '@manually',
         executor: 'shell',
         executor_config: {
-            command: `/bin/sh -c 'ENV_JOB_DESCRIPTION="${displayname.replace(/'/g, "'\\''")}" ENV_JOB_OWNER="agent" processor "${cmd.replace(/'/g, "'\\''")}"'`
+            command: `/bin/sh -c 'ENV_JOB_DESCRIPTION="${displayname.replace(/"/g, '\\"')}" ENV_JOB_OWNER=agent /usr/local/bin/processor "${cmd.replace(/"/g, '\\"')}"'`
         },
         ephemeral: true
     };
@@ -118,7 +118,6 @@ async function main() {
         console.log(`[Success] Background task started.`);
         console.log(`Job Name: ${res.name}`);
         console.log(`Display Name: ${displayname}`);
-        console.log(`\nTip: You can view logs with: proc-ctl view ${res.name}`);
     } else {
         console.log(JSON.stringify(res, null, 2));
     }
