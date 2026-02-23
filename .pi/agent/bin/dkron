@@ -7,79 +7,98 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 
 const DKRON_PORT = 18047;
 const DKRON_URL = `http://127.0.0.1:${DKRON_PORT}/v1`;
 
 const args = process.argv.slice(2);
 
-if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
-    console.log(`
+// ── Help texts ──────────────────────────────────────────────
+
+const MAIN_HELP = `
 Usage: dkron <command> [options]
 
 Commands:
-  status                 Get Dkron status
-  jobs [options]         List jobs with filtering and sorting
-  create-job [options]   Create or update a job
-  delete-job <name>      Delete a job by name
-  run <name>             Run a job immediately
-  toggle <name>          Toggle job enabled/disabled state
-  executions <name> [opt] List executions for a specific job
+  status          Get Dkron subsystem status
+  job <action>    Manage scheduled jobs
 
-Options for jobs:
+Run 'dkron <command> -h' for more information on a command.
+`;
+
+const JOB_HELP = `
+Usage: dkron job <action> [options]
+
+Actions:
+  ls [options]           List jobs with filtering and sorting
+  create [options]       Create or update a job
+  run <name>             Run a job immediately
+  delete <name>          Delete a job by name
+  logs <name> [options]  Show execution logs for a job
+
+Options for ls:
   --name <name>          Filter by exact job name
   --query <keyword>      Filter jobs containing keyword in name or description
-  --today                Show jobs scheduled to run today
   --sort <asc|desc>      Sort by next execution time (default: desc, near to far)
 
-Options for create-job:
-  --name <name>          Name for the job (required)
+Options for create:
   --displayname <desc>   Nice name for the job (description)
-  --schedule <expr>      Cron expression or "@at <ISO8601>" or "@every <duration>" (required unless --once without time)
+  --schedule <expr>      Cron expression or "@at <ISO8601>" or "@every <duration>" (required)
   --command <cmd>        Command to execute (required)
-  --once                 One-time job, deleted after execution
 
-Options for executions:
+Options for logs:
   --last                 Show only the most recent execution (including running)
 
-Example:
+Examples:
   # Periodic job (every 1 minute)
-  dkron create-job --name periodic-job --schedule "@every 1m" --command "echo periodic"
+  dkron job create --schedule "@every 1m" --command "echo periodic"
 
-  # Immediate one-time job (run now, deleted after)
-  dkron create-job --name quick-task --command "echo hello" --once
-
-  # Future one-time job (UTC time, deleted after)
-  dkron create-job --name future-task --schedule "@at 2026-12-31T23:59:00Z" --command "echo year-end" --once
-
-  # Query jobs scheduled for today
-  dkron jobs --today
+  # Future one-time job (UTC time)
+  dkron job create --displayname "New Year Task" --schedule "@at 2026-12-31T23:59:00Z" --command "echo year-end"
 
   # Find a specific job by name or keyword
-  dkron jobs --name test-job
-  dkron jobs --query "backup"
+  dkron job ls --name test-job
+  dkron job ls --query "backup"
 
-  # Check the most recent execution of a job (including logs)
-  dkron executions test-job --last
+  # Check the most recent execution of a job (including output)
+  dkron job logs test-job --last
 
-  dkron status
-  dkron toggle test-job
-  `);
-    process.exit(0);
-}
+  # Run / delete a job
+  dkron job run test-job
+  dkron job delete test-job
+`;
 
-const command = args[0];
+// ── Utilities ───────────────────────────────────────────────
 
-function getFlag(flagName) {
-    const index = args.indexOf(`--${flagName}`);
-    if (index !== -1 && index + 1 < args.length) {
-        return args[index + 1];
+function getFlag(flagName, list = args) {
+    const index = list.indexOf(`--${flagName}`);
+    if (index !== -1 && index + 1 < list.length) {
+        return list[index + 1];
     }
     return null;
 }
 
-function hasFlag(flagName) {
-    return args.includes(`--${flagName}`);
+function hasFlag(flagName, list = args) {
+    return list.includes(`--${flagName}`);
+}
+
+function showHelp(text) {
+    console.log(text);
+    process.exit(0);
+}
+
+function needsHelp(list = args) {
+    return list.length === 0 || list.includes('-h') || list.includes('--help');
+}
+
+function generateId(size = 12) {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let id = '';
+    const bytes = randomBytes(size);
+    for (let i = 0; i < size; i++) {
+        id += alphabet[bytes[i] % alphabet.length];
+    }
+    return id;
 }
 
 async function callDkron(path, method = 'GET', data = null) {
@@ -109,162 +128,143 @@ async function callDkron(path, method = 'GET', data = null) {
     }
 }
 
+// ── Top-level routing ───────────────────────────────────────
+
+if (needsHelp()) showHelp(MAIN_HELP);
+
+const command = args[0];
+const subArgs = args.slice(1);
+
 switch (command) {
     case 'status': {
+        if (needsHelp(subArgs)) {
+            showHelp(`\nUsage: dkron status\n\nShow Dkron subsystem status.\n`);
+        }
         const res = await callDkron('');
         console.log(JSON.stringify(res, null, 2));
         break;
     }
-    case 'jobs': {
-        const nameFilter = getFlag('name');
-        const queryFilter = getFlag('query');
-        const todayOnly = hasFlag('today');
-        const sortOrder = getFlag('sort') || 'desc';
+    case 'job': {
+        if (needsHelp(subArgs)) showHelp(JOB_HELP);
+        const action = subArgs[0];
+        const actionArgs = subArgs.slice(1);
 
-        let jobs = await callDkron('/jobs');
-        if (!Array.isArray(jobs)) {
-            console.log(jobs || 'No jobs found');
-            break;
-        }
+        switch (action) {
+            // ── job ls ──────────────────────────────────────
+            case 'ls': {
+                const nameFilter = getFlag('name', actionArgs);
+                const queryFilter = getFlag('query', actionArgs);
+                const sortOrder = getFlag('sort', actionArgs) || 'desc';
 
-        // 1. Exact name filtering
-        if (nameFilter) {
-            jobs = jobs.filter(j => j.name === nameFilter);
-        }
+                let jobs = await callDkron('/jobs');
+                if (!Array.isArray(jobs)) {
+                    console.log(jobs || 'No jobs found');
+                    break;
+                }
 
-        // 2. Keyword filtering
-        if (queryFilter) {
-            const q = queryFilter.toLowerCase();
-            jobs = jobs.filter(j =>
-                (j.name && j.name.toLowerCase().includes(q)) ||
-                (j.displayname && j.displayname.toLowerCase().includes(q))
-            );
-        }
+                if (nameFilter) {
+                    jobs = jobs.filter(j => j.name === nameFilter);
+                }
 
-        // 3. Today filtering
-        if (todayOnly) {
-            const now = new Date();
-            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                if (queryFilter) {
+                    const q = queryFilter.toLowerCase();
+                    jobs = jobs.filter(j =>
+                        (j.name && j.name.toLowerCase().includes(q)) ||
+                        (j.displayname && j.displayname.toLowerCase().includes(q))
+                    );
+                }
 
-            jobs = jobs.filter(j => {
-                if (!j.next || j.next.startsWith('0001')) return false;
-                const nextRun = new Date(j.next);
-                return nextRun >= startOfDay && nextRun <= endOfDay;
-            });
-        }
+                jobs.sort((a, b) => {
+                    const timeA = a.next && !a.next.startsWith('0001') ? new Date(a.next).getTime() : 0;
+                    const timeB = b.next && !b.next.startsWith('0001') ? new Date(b.next).getTime() : 0;
+                    return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+                });
 
-        // 4. Sorting (default: descending / near to far based on 'next' run time)
-        jobs.sort((a, b) => {
-            const timeA = a.next && !a.next.startsWith('0001') ? new Date(a.next).getTime() : 0;
-            const timeB = b.next && !b.next.startsWith('0001') ? new Date(b.next).getTime() : 0;
-            return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
-        });
-
-        console.log(JSON.stringify(jobs, null, 2));
-        break;
-    }
-    case 'create-job': {
-        const name = getFlag('name');
-        const schedule = getFlag('schedule');
-        const cmd = getFlag('command');
-        const displayname = getFlag('displayname');
-        const once = hasFlag('once');
-
-        if (!name || (!schedule && !once) || !cmd) {
-            console.error('Error: --name, --command, and --schedule (unless --once) are required');
-            process.exit(1);
-        }
-
-        // Schedule logic:
-        //   --once + --schedule  → future one-time (e.g. "@at 2026-...")
-        //   --once (no schedule) → immediate one-time ("@manually" + runoncreate)
-        //   no --once            → periodic (use schedule as-is)
-        let effectiveSchedule;
-        let runOnCreate = false;
-
-        if (once) {
-            if (schedule) {
-                effectiveSchedule = schedule;
-            } else {
-                effectiveSchedule = '@manually';
-                runOnCreate = true;
+                console.log(JSON.stringify(jobs, null, 2));
+                break;
             }
-        } else {
-            effectiveSchedule = schedule;
-        }
+            // ── job create ──────────────────────────────────
+            case 'create': {
+                const schedule = getFlag('schedule', actionArgs);
+                const cmd = getFlag('command', actionArgs);
+                const displayname = getFlag('displayname', actionArgs);
 
-        const jobData = {
-            name,
-            schedule: effectiveSchedule,
-            displayname: displayname || undefined,
-            executor: 'shell',
-            executor_config: {
-                command: `/bin/sh -c 'ENV_JOB_DESCRIPTION="${(displayname || '').replace(/'/g, "'\\''")}" processor "${cmd.replace(/'/g, "'\\''")}"'`
-            },
-            ephemeral: once || undefined
-        };
+                if (!schedule || !cmd) {
+                    console.error('Error: --command and --schedule are required');
+                    process.exit(1);
+                }
 
-        const path = runOnCreate ? '/jobs?runoncreate=true' : '/jobs';
-        const res = await callDkron(path, 'POST', jobData);
-        console.log(JSON.stringify(res, null, 2));
-        break;
-    }
-    case 'delete-job': {
-        const name = args[1];
-        if (!name) {
-            console.error('Error: job name is required');
-            process.exit(1);
-        }
-        const res = await callDkron(`/jobs/${name}`, 'DELETE');
-        console.log(JSON.stringify(res, null, 2));
-        break;
-    }
-    case 'run': {
-        const name = args[1];
-        if (!name) {
-            console.error('Error: job name is required');
-            process.exit(1);
-        }
-        const res = await callDkron(`/jobs/${name}`, 'POST');
-        console.log(JSON.stringify(res, null, 2));
-        break;
-    }
-    case 'toggle': {
-        const name = args[1];
-        if (!name) {
-            console.error('Error: job name is required');
-            process.exit(1);
-        }
-        const res = await callDkron(`/jobs/${name}/toggle`, 'POST');
-        console.log(JSON.stringify(res, null, 2));
-        break;
-    }
-    case 'executions': {
-        const name = args[1];
-        if (!name || name.startsWith('--')) {
-            console.error('Error: job name is required');
-            process.exit(1);
-        }
-        const lastOnly = hasFlag('last');
+                const name = generateId();
+                const jobData = {
+                    name,
+                    schedule,
+                    displayname: displayname || undefined,
+                    executor: 'shell',
+                    executor_config: {
+                        command: cmd
+                    }
+                };
 
-        let res = await callDkron(`/jobs/${name}/executions`);
-        if (!Array.isArray(res)) {
-            console.log(JSON.stringify(res, null, 2));
-            break;
-        }
+                const res = await callDkron('/jobs', 'POST', jobData);
+                console.log(`Job created successfully: ${name}`);
+                console.log(JSON.stringify(res, null, 2));
+                break;
+            }
+            // ── job run ─────────────────────────────────────
+            case 'run': {
+                const name = actionArgs[0];
+                if (!name || name.startsWith('-')) {
+                    console.error('Error: job name is required');
+                    process.exit(1);
+                }
+                const res = await callDkron(`/jobs/${name}`, 'POST');
+                console.log(JSON.stringify(res, null, 2));
+                break;
+            }
+            // ── job delete ──────────────────────────────────
+            case 'delete': {
+                const name = actionArgs[0];
+                if (!name || name.startsWith('-')) {
+                    console.error('Error: job name is required');
+                    process.exit(1);
+                }
+                const res = await callDkron(`/jobs/${name}`, 'DELETE');
+                console.log(JSON.stringify(res, null, 2));
+                break;
+            }
+            // ── job logs ────────────────────────────────────
+            case 'logs': {
+                const name = actionArgs[0];
+                if (!name || name.startsWith('-')) {
+                    console.error('Error: job name is required');
+                    process.exit(1);
+                }
+                const lastOnly = hasFlag('last', actionArgs);
 
-        // Sort by started_at desc primarily
-        res.sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+                let res = await callDkron(`/jobs/${name}/executions`);
+                if (!Array.isArray(res)) {
+                    console.log(JSON.stringify(res, null, 2));
+                    break;
+                }
 
-        if (lastOnly && res.length > 0) {
-            console.log(JSON.stringify(res[0], null, 2));
-        } else {
-            console.log(JSON.stringify(res, null, 2));
+                res.sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+
+                if (lastOnly && res.length > 0) {
+                    console.log(JSON.stringify(res[0], null, 2));
+                } else {
+                    console.log(JSON.stringify(res, null, 2));
+                }
+                break;
+            }
+            default:
+                console.error(`Unknown job action: ${action}`);
+                console.error(`Run 'dkron job -h' for usage.`);
+                process.exit(1);
         }
         break;
     }
     default:
         console.error(`Unknown command: ${command}`);
+        console.error(`Run 'dkron -h' for usage.`);
         process.exit(1);
 }
