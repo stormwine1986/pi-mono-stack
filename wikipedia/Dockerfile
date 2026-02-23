@@ -5,7 +5,8 @@ LABEL openclaw-skill=1
 WORKDIR /app
 
 # Install dependencies
-RUN pip install --no-cache-dir html2text
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip install --no-cache-dir html2text
 
 # Copy skill files and scripts
 # We assume the build context is the 'wikipedia' directory

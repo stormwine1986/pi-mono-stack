@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 直接从 PyPI 安装 memsearch 及其常用扩展
-RUN pip install --no-cache-dir "memsearch" "memsearch[google]" "memsearch[voyage]"
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip install --no-cache-dir "memsearch" "memsearch[google]" "memsearch[voyage]"
 
 # 创建 pi-mono 用户和组 (1000:1000)
 RUN groupadd -g 1000 pi-mono && \

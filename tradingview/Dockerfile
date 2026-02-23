@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 # Install python dependencies
 # akshare depends on many libs, tvDatafeed depends on pandas/requests
 # We install akshare first, then tvDatafeed from git
-RUN pip install --no-cache-dir requests pandas akshare
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip install --no-cache-dir requests pandas akshare
 RUN pip install --no-cache-dir git+https://github.com/rongardF/tvdatafeed.git
 
 # Set up app directory

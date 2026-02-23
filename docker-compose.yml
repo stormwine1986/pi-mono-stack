@@ -57,6 +57,7 @@ services:
     build:
       context: memsearch
       dockerfile: Dockerfile
+      network: host
     container_name: memsearch
     environment:
       - VOYAGE_API_KEY

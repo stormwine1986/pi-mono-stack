@@ -14,7 +14,8 @@ WORKDIR /build
 RUN git clone https://github.com/Polymarket/agents.git /build/polymarket-agents
 
 # Install dependencies into /root/.local
-RUN pip install --user --no-cache-dir \
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip install --user --no-cache-dir \
     httpx \
     pydantic \
     eth-account \

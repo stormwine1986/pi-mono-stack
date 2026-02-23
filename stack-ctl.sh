@@ -24,6 +24,11 @@ load_secrets() {
 # ---------- commands ----------
 cmd_up() {
   load_secrets
+  echo "📂 Preparing .pi directory permissions …"
+  if [ -d "${SCRIPT_DIR}/.pi" ]; then
+    sudo chown -R 1000:1000 "${SCRIPT_DIR}/.pi"
+    sudo chmod -R g+rwX "${SCRIPT_DIR}/.pi"
+  fi
   echo "🚀 Starting stack …"
   docker compose -f "${SCRIPT_DIR}/docker-compose.yml" up -d "$@"
   echo "✅ Stack is up."
