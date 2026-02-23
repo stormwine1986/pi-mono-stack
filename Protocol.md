@@ -60,17 +60,17 @@ Control signals to manage the Agent's lifecycle or current operation.
 }
 ```
 
-### 4. Process Output (`process_out`)
-Stream: `process_out` (Redis Stream)
+### 4. Process Output (`background_out`)
+Stream: `background_out` (Redis Stream)
 Direction: Dkron -> Gateway
 
-Stream of job execution results from Dkron tasks.
+Stream of background task completion events.
 
+`payload` is a json string of message
 **Format (JSON):**
 ```json
 {
   "job": "string",           // Job name (e.g., "backup-task")
-  "description": "string",   // Job description or display name
   "owner": "string",         // Job owner identifier
   "exit_code": number,       // Exit code (0 for success)
   "timestamp": "ISO-8601"    // Execution timestamp (UTC)

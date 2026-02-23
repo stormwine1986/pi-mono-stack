@@ -14,39 +14,33 @@ const DKRON_URL = `http://127.0.0.1:${DKRON_PORT}/v1`;
 
 const args = process.argv.slice(2);
 
-// ── Help texts ──────────────────────────────────────────────
+// ── Help text ───────────────────────────────────────────────
 
-const MAIN_HELP = `
+const HELP = `
 Usage: dkron <command> [options]
 
 Commands:
-  status          Get Dkron subsystem status
-  job <action>    Manage scheduled jobs
+  status                 Get Dkron subsystem status
+  job ls [options]       List jobs with filtering and sorting
+  job create [options]   Create or update a job
+  job run <name>         Run a job immediately
+  job delete <name>      Delete a job by name
+  job logs <name> [opt]  Show execution logs for a job
 
-Run 'dkron <command> -h' for more information on a command.
-`;
-
-const JOB_HELP = `
-Usage: dkron job <action> [options]
-
-Actions:
-  ls [options]           List jobs with filtering and sorting
-  create [options]       Create or update a job
-  run <name>             Run a job immediately
-  delete <name>          Delete a job by name
-  logs <name> [options]  Show execution logs for a job
-
-Options for ls:
+Options for job ls:
   --name <name>          Filter by exact job name
   --query <keyword>      Filter jobs containing keyword in name or description
   --sort <asc|desc>      Sort by next execution time (default: desc, near to far)
 
-Options for create:
+Options for job create:
   --displayname <desc>   Nice name for the job (description)
   --schedule <expr>      Cron expression or "@at <ISO8601>" or "@every <duration>" (required)
   --command <cmd>        Command to execute (required)
+  --executor <name>      Executor to use (default: shell)
+  --timeout <duration>   Job timeout (e.g. 10s, 5m)
+  --env <KEY=VALUE>      Environment variables (can be used multiple times)
 
-Options for logs:
+Options for job logs:
   --last                 Show only the most recent execution (including running)
 
 Examples:
@@ -78,12 +72,22 @@ function getFlag(flagName, list = args) {
     return null;
 }
 
+function getFlags(flagName, list = args) {
+    const values = [];
+    for (let i = 0; i < list.length; i++) {
+        if (list[i] === `--${flagName}` && i + 1 < list.length) {
+            values.push(list[i + 1]);
+        }
+    }
+    return values;
+}
+
 function hasFlag(flagName, list = args) {
     return list.includes(`--${flagName}`);
 }
 
-function showHelp(text) {
-    console.log(text);
+function showHelp() {
+    console.log(HELP);
     process.exit(0);
 }
 
@@ -130,22 +134,19 @@ async function callDkron(path, method = 'GET', data = null) {
 
 // ── Top-level routing ───────────────────────────────────────
 
-if (needsHelp()) showHelp(MAIN_HELP);
+if (needsHelp()) showHelp();
 
 const command = args[0];
 const subArgs = args.slice(1);
 
 switch (command) {
     case 'status': {
-        if (needsHelp(subArgs)) {
-            showHelp(`\nUsage: dkron status\n\nShow Dkron subsystem status.\n`);
-        }
         const res = await callDkron('');
         console.log(JSON.stringify(res, null, 2));
         break;
     }
     case 'job': {
-        if (needsHelp(subArgs)) showHelp(JOB_HELP);
+        if (needsHelp(subArgs)) showHelp();
         const action = subArgs[0];
         const actionArgs = subArgs.slice(1);
 
@@ -188,6 +189,9 @@ switch (command) {
                 const schedule = getFlag('schedule', actionArgs);
                 const cmd = getFlag('command', actionArgs);
                 const displayname = getFlag('displayname', actionArgs);
+                const executor = getFlag('executor', actionArgs) || 'shell';
+                const timeout = getFlag('timeout', actionArgs);
+                const envs = getFlags('env', actionArgs);
 
                 if (!schedule || !cmd) {
                     console.error('Error: --command and --schedule are required');
@@ -199,9 +203,11 @@ switch (command) {
                     name,
                     schedule,
                     displayname: displayname || undefined,
-                    executor: 'shell',
+                    executor: executor,
                     executor_config: {
-                        command: cmd
+                        command: cmd,
+                        timeout: timeout || undefined,
+                        env: envs.length > 0 ? JSON.stringify(envs) : undefined
                     }
                 };
 
@@ -258,7 +264,7 @@ switch (command) {
             }
             default:
                 console.error(`Unknown job action: ${action}`);
-                console.error(`Run 'dkron job -h' for usage.`);
+                console.error(`Run 'dkron -h' for usage.`);
                 process.exit(1);
         }
         break;

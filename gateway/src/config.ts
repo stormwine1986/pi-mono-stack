@@ -4,7 +4,7 @@ export const config = {
     agent_in: 'agent_in',
     agent_out: 'agent_out',
     agent_ctl: 'agent_ctl',
-    process_out: 'process_out',
+    background_out: 'background_out',
     tgConsumerGroup: 'tg-bot',
     tgConsumerName: 'bot-1',
     dkronConsumerGroup: 'gateway-dkron',
