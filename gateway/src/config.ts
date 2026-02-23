@@ -5,6 +5,7 @@ export const config = {
     agent_out: 'agent_out',
     agent_ctl: 'agent_ctl',
     background_out: 'background_out',
+    reminder_out: 'reminder_out',
     tgConsumerGroup: 'tg-bot',
     tgConsumerName: 'bot-1',
     dkronConsumerGroup: 'gateway-dkron',

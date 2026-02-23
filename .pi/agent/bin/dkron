@@ -35,8 +35,9 @@ Options for job ls:
 Options for job create:
   --displayname <desc>   Nice name for the job (description)
   --schedule <expr>      Cron expression or "@at <ISO8601>" or "@every <duration>" (required)
-  --command <cmd>        Command to execute (required)
-  --executor <name>      Executor to use (default: shell)
+  --command <cmd>        Command to execute (required for shell/background)
+  --message <msg>        Message for the reminder (required for reminder)
+  --executor <name>      Executor to use (default: background)
   --timeout <duration>   Job timeout (e.g. 10s, 5m)
   --env <KEY=VALUE>      Environment variables (can be used multiple times)
 
@@ -49,6 +50,9 @@ Examples:
 
   # Future one-time job (UTC time)
   dkron job create --displayname "New Year Task" --schedule "@at 2026-12-31T23:59:00Z" --command "echo year-end"
+
+  # Reminder job
+  dkron job create --executor reminder --schedule "@every 5m" --message "Time to drink water"
 
   # Find a specific job by name or keyword
   dkron job ls --name test-job
@@ -188,13 +192,24 @@ switch (command) {
             case 'create': {
                 const schedule = getFlag('schedule', actionArgs);
                 const cmd = getFlag('command', actionArgs);
+                const message = getFlag('message', actionArgs);
                 const displayname = getFlag('displayname', actionArgs);
-                const executor = getFlag('executor', actionArgs) || 'shell';
+                const executor = getFlag('executor', actionArgs) || 'background';
                 const timeout = getFlag('timeout', actionArgs);
                 const envs = getFlags('env', actionArgs);
 
-                if (!schedule || !cmd) {
-                    console.error('Error: --command and --schedule are required');
+                if (!schedule) {
+                    console.error('Error: --schedule is required');
+                    process.exit(1);
+                }
+
+                if (executor === 'reminder' && !message) {
+                    console.error('Error: --message is required for reminder executor');
+                    process.exit(1);
+                }
+
+                if (executor !== 'reminder' && !cmd) {
+                    console.error('Error: --command is required');
                     process.exit(1);
                 }
 
@@ -205,7 +220,8 @@ switch (command) {
                     displayname: displayname || undefined,
                     executor: executor,
                     executor_config: {
-                        command: cmd,
+                        command: cmd || undefined,
+                        message: message || undefined,
                         timeout: timeout || undefined,
                         env: envs.length > 0 ? JSON.stringify(envs) : undefined
                     }

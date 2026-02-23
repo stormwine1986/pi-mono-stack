@@ -6,6 +6,7 @@ import { WorkerTask, WorkerControlSignal } from './types.js';
 import { TelegramSender } from './telegram/sender.js';
 import { startResultListener } from './telegram/listener.js';
 import { startDkronListener } from './dkron/listener.js';
+import { startReminderListener } from './dkron/reminder.js';
 import { logger } from './logger.js';
 
 const bot = new Telegraf(config.telegramToken);
@@ -13,6 +14,7 @@ const sender = new TelegramSender(bot);
 const redisProducer = new Redis(config.redisUrl);
 const redisConsumer = new Redis(config.redisUrl);
 const redisDkronConsumer = new Redis(config.redisUrl);
+const redisReminderConsumer = new Redis(config.redisUrl);
 
 // Middleware for authorization
 bot.use(async (ctx, next) => {
@@ -90,12 +92,14 @@ async function main() {
 
         startResultListener(bot, sender, redisConsumer);
         startDkronListener(redisProducer, redisDkronConsumer, sender);
+        startReminderListener(redisProducer, redisReminderConsumer, sender);
 
         const stop = () => {
             bot.stop();
             redisProducer.disconnect();
             redisConsumer.disconnect();
-            redisDkronConsumer.disconnect(); // <--- Disconnect
+            redisDkronConsumer.disconnect();
+            redisReminderConsumer.disconnect();
             process.exit(0);
         };
         process.once('SIGINT', stop);

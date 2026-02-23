@@ -60,7 +60,7 @@ Control signals to manage the Agent's lifecycle or current operation.
 }
 ```
 
-### 4. Process Output (`background_out`)
+### 4. Background Output (`background_out`)
 Stream: `background_out` (Redis Stream)
 Direction: Dkron -> Gateway
 
@@ -73,6 +73,23 @@ Stream of background task completion events.
   "job": "string",           // Job name (e.g., "backup-task")
   "owner": "string",         // Job owner identifier
   "exit_code": number,       // Exit code (0 for success)
+  "timestamp": "ISO-8601"    // Execution timestamp (UTC)
+}
+```
+
+### 5. Reminder Output (`reminder_out`)
+Stream: `reminder_out` (Redis Stream)
+Direction: Dkron -> Gateway
+
+Stream of reminder triggered events.
+
+`payload` is a json string of message
+**Format (JSON):**
+```json
+{
+  "job": "string",           // Job name (e.g., "backup-task")
+  "owner": "string",         // Job owner identifier
+  "message": "string",       // 提醒的内容
   "timestamp": "ISO-8601"    // Execution timestamp (UTC)
 }
 ```
