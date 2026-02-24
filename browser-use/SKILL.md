@@ -1,6 +1,6 @@
 ---
 name: "browser-use"
-description: "Automates browser interactions for web testing, form filling, screenshots, and data extraction. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, or extract information from web pages."
+description: "Automates browser interactions for web testing, form filling, and screenshots. Use when the user needs to navigate websites, interact with web pages, fill forms, or take screenshots."
 ---
 
 # Browser Automation with `browser-use` CLI
@@ -80,11 +80,14 @@ docker exec browser-use browser-use close-tab                     # Close curren
 docker exec browser-use browser-use close-tab <tab>               # Close specific tab
 ```
 
-### JavaScript & Data
+### JavaScript
 ```bash
 docker exec browser-use browser-use eval "document.title"         # Execute JavaScript, return result
-docker exec browser-use browser-use extract "all product prices"  # Extract data using LLM (requires API key)
 ```
+
+## Prohibited Commands
+
+- **DO NOT USE** `browser-use extract`. This command is strictly prohibited as it triggers internal LLM calls that are not compatible with the current environment. For data extraction, use `browser-use state` and `browser-use eval` to manually inspect and retrieve required information.
 
 ### Session Management
 ```bash
@@ -112,7 +115,7 @@ docker exec browser-use browser-use state  # Verify success
 1. **Always run `docker exec browser-use browser-use state` first** to see available elements and their indices
 2. **Sessions persist** - the browser stays open between commands
 3. **Use `--json` for parsing** output programmatically
-4. **Screenshots** - The workspace's `.browser-use` directory is recommended for saving web screenshots. Example: `docker exec browser-use browser-use screenshot .browser-use/page.png`.
+4. **Screenshots** - Files should be saved to the `.browser-use` directory to keep the workspace clean. Example: `docker exec browser-use browser-use screenshot .browser-use/page.png`.
 
 ## Cleanup
 

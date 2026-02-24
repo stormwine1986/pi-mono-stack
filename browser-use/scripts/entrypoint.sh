@@ -11,16 +11,22 @@ cat << "EOF"
 
 EOF
 
-# Initialize workspace/.browser-use
+# 路径定义
 WORKSPACE_DIR="/home/pi-mono/.pi/agent/workspace"
 BROWSER_USE_DIR="${WORKSPACE_DIR}/.browser-use"
 
+# 运行时检查：因为宿主挂载会覆盖镜像预建目录，所以必须在启动时确保子目录存在
 if [ ! -d "$BROWSER_USE_DIR" ]; then
-    echo "Creating .browser-use directory in workspace: $BROWSER_USE_DIR"
+    echo "Initializing: .browser-use directory not found in mounted workspace. Creating it..."
     mkdir -p "$BROWSER_USE_DIR"
 fi
 
-echo "Container is running. You can now use 'browser-use' CLI command."
+# 切换到目标工作目录（防止 WORKDIR 因为挂载失效或偏移）
+cd "$BROWSER_USE_DIR"
 
-# 使用 tail -f /dev/null 让容器保持永久运行（这是 Docker 中常用的挂起命令）
+echo "Browser-use container is ready."
+echo "Current Directory: $(pwd)"
+echo "You can now use 'docker exec browser-use browser-use <command>'"
+
+# 保持容器永久运行
 exec tail -f /dev/null

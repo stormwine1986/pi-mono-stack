@@ -1,26 +1,28 @@
-# Use official Playwright image which includes browsers and system dependencies
-FROM mcr.microsoft.com/playwright/python:v1.49.1-jammy
+# Use official Playwright image with Python 3.12 (noble)
+# browser-use requires Python >= 3.11, jammy only has 3.10
+FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
 
 # Install uv for fast package management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-WORKDIR /app
+# Install browser-use and playwright
+RUN uv pip install --system --no-cache --prerelease=allow "browser-use[cli]" playwright
 
-# Install browser-use and its dependencies
-RUN uv pip install --system "browser-use[cli]" playwright
+# Install chromium browser
+RUN python3 -m playwright install --with-deps chromium
 
-# Ensure browsers are ready (though base image has them, sometimes specific versions are needed by the lib)
-RUN python -m playwright install chromium
-
-# Copy skill definition and scripts
-# Assumes build context is the browser-use directory
-COPY SKILL.md /app/SKILL.md
-COPY scripts/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-# Setup user 1000 and directory permissions
-RUN id -u 1000 &>/dev/null || useradd -u 1000 -m -s /bin/bash pi-mono
-RUN mkdir -p /home/pi-mono/.pi/agent/workspace && \
+# Setup user and directories (noble image may already have UID 1000)
+RUN (id -u 1000 &>/dev/null || useradd -u 1000 -m -s /bin/bash pi-mono) && \
+    mkdir -p /home/pi-mono/.pi/agent/workspace/.browser-use && \
     chown -R 1000:1000 /home/pi-mono
 
-CMD ["/app/entrypoint.sh"]
+# Copy application files
+WORKDIR /app
+COPY . .
+RUN chmod +x scripts/entrypoint.sh
+
+# Set runtime environment
+USER 1000
+WORKDIR /home/pi-mono/.pi/agent/workspace
+
+CMD ["/app/scripts/entrypoint.sh"]
