@@ -1,5 +1,9 @@
 import { Telegraf } from 'telegraf';
+import { createReadStream, existsSync } from 'fs';
+import { resolve, basename } from 'path';
 import { logger } from '../logger.js';
+
+const WORKSPACE_DIR = '/home/pi-mono/.pi/agent/workspace';
 
 // Helper to sanitize and format message content for Telegram HTML parse mode
 export function formatToTelegramHtml(text: string): string {
@@ -87,6 +91,34 @@ export class TelegramSender {
         }
     }
 
+    /**
+     * Send a photo from workspace to Telegram.
+     * @param adminId - Telegram admin chat ID
+     * @param relativePath - Path relative to workspace dir (e.g. ".browser-use/screenshot.png")
+     * @param caption - Optional caption for the photo
+     */
+    async sendAdminPhoto(adminId: number, relativePath: string, caption?: string) {
+        const absolutePath = resolve(WORKSPACE_DIR, relativePath);
+
+        if (!existsSync(absolutePath)) {
+            logger.error(`Photo file not found: ${absolutePath}`);
+            await this.sendAdminMessage(adminId, `⚠️ 图片文件未找到: ${relativePath}`);
+            return;
+        }
+
+        try {
+            const formattedCaption = caption ? formatToTelegramHtml(caption) : undefined;
+            await this.bot.telegram.sendPhoto(adminId, {
+                source: createReadStream(absolutePath),
+                filename: basename(absolutePath),
+            }, formattedCaption ? { caption: formattedCaption, parse_mode: 'HTML' } : {});
+            logger.info(`Photo sent to admin: ${relativePath}`);
+        } catch (err) {
+            logger.error(`Failed to send photo ${relativePath}:`, err);
+            await this.sendAdminMessage(adminId, `⚠️ 图片发送失败: ${relativePath}`);
+        }
+    }
+
     private splitByRelevantNewlines(text: string, maxLength: number): string[] {
         const chunks: string[] = [];
         let remaining = text;
@@ -117,3 +149,4 @@ export class TelegramSender {
         return chunks;
     }
 }
+

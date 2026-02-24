@@ -67,6 +67,7 @@ bot.on('message', async (ctx) => {
 
         logger.info(`Pushing task ${taskId} to ${config.agent_in}: ${task.prompt}`);
         await redisProducer.xadd(config.agent_in, '*', 'payload', JSON.stringify(task));
+        ctx.sendChatAction('typing').catch(() => { });
     }
 });
 

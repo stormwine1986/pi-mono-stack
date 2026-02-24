@@ -1,6 +1,5 @@
 {
   "defaultProvider": "litellm",
   "defaultModel": "minimax-m2.5",
-  "defaultThinkingLevel": "high",
-  "lastChangelogVersion": "0.52.10"
+  "defaultThinkingLevel": "high"
 }

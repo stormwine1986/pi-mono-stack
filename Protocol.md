@@ -40,8 +40,11 @@ Represents the response or status update from the Agent.
   "status": "success" | "error" | "progress",
   "response": "string",      // Final text response (if status is success)
   "error": "string",         // Error message (if status is error)
-  "event": "string",         // Progress event type (e.g., "llm_start", "tool_use")
-  "data": { ... }            // Additional event data
+  "event": "llm_start" | "llm_end" | "tool_start" | "tool_end" | "send_media",
+  "data": { 
+    "path": "string",       // Workspace-relative path to the media file
+    "type": "image" | "file" // Type of media
+  }            // Additional event data
 }
 ```
 
