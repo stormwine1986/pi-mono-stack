@@ -51,6 +51,42 @@ cmd_down() {
   echo "✅ Stack is down."
 }
 
+cmd_backup() {
+  local TIMESTAMP=$(date +%Y%m%d%H%M%S)
+  local BACKUP_NAME="pi-workspace-${TIMESTAMP}.tar.gz"
+  local LOCAL_BACKUP_PATH="/tmp/${BACKUP_NAME}"
+  local REMOTE="garage:pi-workspace"
+
+  echo "📦 Compressing .pi/agent/workspace …"
+  if [ ! -d "${SCRIPT_DIR}/.pi/agent/workspace" ]; then
+    echo "❌ Error: Workspace directory not found at ${SCRIPT_DIR}/.pi/agent/workspace"
+    exit 1
+  fi
+  tar -czf "${LOCAL_BACKUP_PATH}" -C "${SCRIPT_DIR}/.pi/agent" workspace
+
+  echo "📤 Uploading backup to ${REMOTE} …"
+  rclone copy "${LOCAL_BACKUP_PATH}" "${REMOTE}"
+
+  # Clean up local file
+  rm "${LOCAL_BACKUP_PATH}"
+
+  echo "🧹 Cleaning up old backups (keeping only 3) …"
+  # List files, sort descending (newest first), skip first 3, and delete the rest
+  local OLD_BACKUPS
+  OLD_BACKUPS=$(rclone lsf "${REMOTE}" --files-only | sort -r | tail -n +4)
+  
+  if [ -n "$OLD_BACKUPS" ]; then
+    for b in $OLD_BACKUPS; do
+      echo "🗑️ Deleting old backup: $b"
+      rclone deletefile "${REMOTE}/$b"
+    done
+  else
+    echo "✨ No old backups to clean up."
+  fi
+
+  echo "✅ Backup complete."
+}
+
 # ---------- usage ----------
 usage() {
   cat <<EOF
@@ -61,6 +97,7 @@ Commands:
   down    Stop and remove containers, networks (docker compose down)
   build   Build or rebuild services
   logs    Follow service logs (docker compose logs -f)
+  backup  Compress and backup agent workspace to rclone remote (garage)
 
 EOF
   exit 1
@@ -78,5 +115,6 @@ case "$COMMAND" in
   down)   cmd_down "$@" ;;
   build)  cmd_build "$@" ;;
   logs)   cmd_logs "$@" ;;
+  backup) cmd_backup ;;
   *)      echo "❌ Unknown command: $COMMAND"; usage ;;
 esac
