@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+# Path inside the agent container
+WORKSPACE_DIR="/home/pi-mono/.pi/agent/workspace"
+REMOTE_NAME="s3"
+BACKUP_PATH="backups/workspace"
+
+usage() {
+    echo "Usage: s3 <command>"
+    echo "Commands:"
+    echo "  backup    Package and backup workspace to S3 repository"
+    exit 1
+}
+
+cmd_backup() {
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_file="workspace_${timestamp}.tar.gz"
+    local temp_path="/tmp/${backup_file}"
+
+    echo -e "\e[36m[S3] Starting backup of workspace...\e[0m"
+    
+    if [ ! -d "$WORKSPACE_DIR" ]; then
+        echo -e "\e[31m[S3] Error: Workspace directory $WORKSPACE_DIR does not exist.\e[0m"
+        exit 1
+    fi
+
+    echo -e "\e[36m[S3] Packaging workspace to $temp_path...\e[0m"
+    # Compress the workspace directory
+    # Using -C to change directory so the tar contains 'workspace/' folder
+    tar -czf "$temp_path" -C "$(dirname "$WORKSPACE_DIR")" workspace
+
+    echo -e "\e[36m[S3] Uploading to S3 repository (${REMOTE_NAME}:${BACKUP_PATH})...\e[0m"
+    if rclone copy "$temp_path" "${REMOTE_NAME}:${BACKUP_PATH}"; then
+        echo -e "\e[32m[S3] Backup completed successfully: ${backup_file}\e[0m"
+    else
+        echo -e "\e[31m[S3] Error: S3 upload failed.\e[0m"
+        rm -f "$temp_path"
+        exit 1
+    fi
+
+    # Cleanup local temporary file
+    rm -f "$temp_path"
+    
+    echo -e "\e[36m[S3] Cleaning up old backups (keeping latest 5)...\e[0m"
+    # List files, sort descending, skip first 5, delete the rest
+    OLD_BACKUPS=$(rclone lsf "${REMOTE_NAME}:${BACKUP_PATH}" --files-only | sort -r | tail -n +6)
+    if [ -n "$OLD_BACKUPS" ]; then
+        while read -r file; do
+            [ -z "$file" ] && continue
+            echo -e "\e[33m[S3] Deleting old backup: $file\e[0m"
+            rclone deletefile "${REMOTE_NAME}:${BACKUP_PATH}/$file"
+        done <<< "$OLD_BACKUPS"
+    fi
+    echo -e "\e[32m[S3] Done.\e[0m"
+}
+
+case "${1:-}" in
+    backup)
+        cmd_backup
+        ;;
+    *)
+        usage
+        ;;
+esac
