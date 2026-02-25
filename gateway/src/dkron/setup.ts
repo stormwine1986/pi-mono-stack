@@ -10,7 +10,7 @@ export async function setupRecoveryJob() {
         owner: 'gateway',
         executor: 'shell',
         executor_config: {
-            command: "sh -c 'set -f; redis-cli -u $REDIS_URL XADD gateway_ctl * action RECOVER_PENDING'"
+            command: "sh -c 'set -f; redis-cli -u $REDIS_URL XADD gateway_ctl MAXLEN ~ 100 * action RECOVER_PENDING'"
         },
         retries: 3,
         concurrency: 'forbid'

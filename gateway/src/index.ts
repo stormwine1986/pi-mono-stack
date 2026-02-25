@@ -96,7 +96,7 @@ bot.on('photo', async (ctx) => {
         };
 
         logger.info(`Pushing photo task ${taskId} to ${config.agent_in}: ${caption}`);
-        await redisProducer.xadd(config.agent_in, '*', 'payload', JSON.stringify(task));
+        await (redisProducer as any).xadd(config.agent_in, 'MAXLEN', '~', 1000, '*', 'payload', JSON.stringify(task));
         ctx.sendChatAction('typing').catch(() => { });
     } catch (err) {
         logger.error(`Failed to process photo for task ${taskId}:`, err);
@@ -118,7 +118,7 @@ bot.on('message', async (ctx) => {
         };
 
         logger.info(`Pushing task ${taskId} to ${config.agent_in}: ${task.prompt}`);
-        await redisProducer.xadd(config.agent_in, '*', 'payload', JSON.stringify(task));
+        await (redisProducer as any).xadd(config.agent_in, 'MAXLEN', '~', 1000, '*', 'payload', JSON.stringify(task));
         ctx.sendChatAction('typing').catch(() => { });
     }
 });

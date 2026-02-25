@@ -46,6 +46,8 @@ func pushToReminderStream(jobName string, message string) {
 
 	xAddArgs := &redis.XAddArgs{
 		Stream: "reminder_out",
+		MaxLen: 1000,
+		Approx: true,
 		Values: map[string]interface{}{
 			"payload": string(jsonBytes),
 		},

@@ -10,6 +10,7 @@ The Gateway module serves as the entry point for external communication, handlin
 
 ### 1. Agent Input (`agent_in`)
 Stream: `agent_in` (Redis Stream)
+Retention: `MAXLEN ~ 1000` (Approximate trimming)
 Direction: Gateway -> Agent
 
 Represents a task or prompt sent to the Agent for processing.
@@ -29,6 +30,7 @@ Represents a task or prompt sent to the Agent for processing.
 
 ### 2. Agent Output (`agent_out`)
 Stream: `agent_out` (Redis Stream)
+Retention: `MAXLEN ~ 1000` (Approximate trimming)
 Direction: Agent -> Gateway
 
 Represents the response or status update from the Agent.
@@ -65,6 +67,7 @@ Control signals to manage the Agent's lifecycle or current operation.
 
 ### 4. Background Output (`background_out`)
 Stream: `background_out` (Redis Stream)
+Retention: `MAXLEN ~ 1000` (Approximate trimming)
 Direction: Dkron -> Gateway
 
 Stream of background task completion events.
@@ -82,6 +85,7 @@ Stream of background task completion events.
 
 ### 5. Reminder Output (`reminder_out`)
 Stream: `reminder_out` (Redis Stream)
+Retention: `MAXLEN ~ 1000` (Approximate trimming)
 Direction: Dkron -> Gateway
 
 Stream of reminder triggered events.
@@ -96,3 +100,12 @@ Stream of reminder triggered events.
   "timestamp": "ISO-8601"    // Execution timestamp (UTC)
 }
 ```
+### 6. Gateway Control (`gateway_ctl`)
+Stream: `gateway_ctl` (Redis Stream)
+Retention: `MAXLEN ~ 100` (Approximate trimming)
+Direction: Dkron -> Gateway
+
+Control signals for Gateway recovery and maintenance.
+
+**Format (Field-Value Pairs):**
+*   `action`: `RECOVER_PENDING` (Trigger pending message recovery)

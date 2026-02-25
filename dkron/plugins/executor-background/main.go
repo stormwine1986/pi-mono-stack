@@ -61,6 +61,8 @@ func pushToRedis(jobName string, exitCode int) {
 
 	xAddArgs := &redis.XAddArgs{
 		Stream: "background_out",
+		MaxLen: 1000,
+		Approx: true,
 		Values: map[string]interface{}{
 			"payload": string(jsonBytes),
 		},
