@@ -26,8 +26,8 @@ services:
 
   gateway:
     build:
-      context: .
-      dockerfile: gateway/Dockerfile
+      context: gateway
+      dockerfile: Dockerfile
       network: host
     container_name: gateway
     depends_on:
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:ro
+      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
     environment:
       - TELEGRAM_TOKEN
       - REDIS_URL=redis://127.0.0.1:6379

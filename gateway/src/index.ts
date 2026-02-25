@@ -1,6 +1,7 @@
 import { Telegraf } from 'telegraf';
 import { Redis } from 'ioredis';
 import { nanoid } from 'nanoid';
+import { writeFile } from 'node:fs/promises';
 import { config } from './config.js';
 import { WorkerTask, WorkerControlSignal } from './types.js';
 import { TelegramSender } from './telegram/sender.js';
@@ -8,6 +9,9 @@ import { startResultListener } from './telegram/listener.js';
 import { startDkronListener } from './dkron/listener.js';
 import { startReminderListener } from './dkron/reminder.js';
 import { logger } from './logger.js';
+
+const WORKSPACE_DIR = '/home/pi-mono/.pi/agent/workspace';
+
 
 const bot = new Telegraf(config.telegramToken);
 const sender = new TelegramSender(bot);
@@ -52,7 +56,54 @@ bot.command('steer', async (ctx) => {
     await redisProducer.publish(config.agent_ctl, JSON.stringify(signal));
 });
 
-// 2. Handle generic messages (Input Queue -> WorkerTask)
+// 2. Handle photo messages
+bot.on('photo', async (ctx) => {
+    const photos = ctx.message.photo;
+    const photo = photos[photos.length - 1]; // Highest resolution
+    if (!photo) return;
+
+    const taskId = nanoid();
+    const caption = ctx.message.caption || '请分析这张图片';
+
+    try {
+        // Get file link from Telegram
+        const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+
+        // Determine file extension from URL
+        const urlPath = new URL(fileLink.href).pathname;
+        const ext = urlPath.substring(urlPath.lastIndexOf('.')) || '.jpg';
+        const fileName = `${taskId}${ext}`;
+        const relativePath = `.gateway/${fileName}`;
+        const fullPath = `${WORKSPACE_DIR}/${relativePath}`;
+
+        // Download the file
+        const response = await fetch(fileLink.href);
+        if (!response.ok) {
+            throw new Error(`Failed to download: ${response.status}`);
+        }
+        const buffer = Buffer.from(await response.arrayBuffer());
+        await writeFile(fullPath, buffer);
+        logger.info(`Photo saved: ${fullPath} (${buffer.length} bytes)`);
+
+        // Send task with image path
+        const task: WorkerTask = {
+            id: taskId,
+            source: 'telegram',
+            prompt: caption,
+            images: [relativePath],
+            metadata: { telegram: `${ctx.chat.id}:${ctx.message.message_id}` }
+        };
+
+        logger.info(`Pushing photo task ${taskId} to ${config.agent_in}: ${caption}`);
+        await redisProducer.xadd(config.agent_in, '*', 'payload', JSON.stringify(task));
+        ctx.sendChatAction('typing').catch(() => { });
+    } catch (err) {
+        logger.error(`Failed to process photo for task ${taskId}:`, err);
+        await ctx.reply('⚠️ 图片处理失败，请重试');
+    }
+});
+
+// 3. Handle text messages (Input Queue -> WorkerTask)
 bot.on('message', async (ctx) => {
     if ('text' in ctx.message) {
         if (ctx.message.text.startsWith('/')) return;
@@ -70,6 +121,7 @@ bot.on('message', async (ctx) => {
         ctx.sendChatAction('typing').catch(() => { });
     }
 });
+
 
 
 // Start everything
