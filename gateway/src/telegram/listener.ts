@@ -41,7 +41,7 @@ export async function startResultListener(
     await processPendingMessages(redisConsumer, bot, sender, adminId, stream, group, consumer);
 
     // Phase 2: Start a separate loop to listen for external recovery triggers (from Dkron)
-    startRecoveryTriggerListener(redisConsumer, bot, sender, adminId, stream, group, consumer);
+    startRecoveryTriggerListener(bot, sender, adminId, stream, group, consumer);
 
     // Phase 3: Main loop — read new messages
     while (true) {
@@ -67,18 +67,23 @@ export async function startResultListener(
 /**
  * Listens for recovery signals on config.gateway_ctl to trigger manual pending recovery.
  * This is meant to be driven by a Dkron periodic job.
+ * IMPORTANT: Uses its own dedicated Redis connection to avoid blocking conflicts
+ * with the main XREADGROUP loop.
  */
 async function startRecoveryTriggerListener(
-    redis: Redis, bot: Telegraf, sender: TelegramSender,
+    bot: Telegraf, sender: TelegramSender,
     adminId: number, stream: string, group: string, consumer: string
 ) {
+    // Create a dedicated Redis connection for this listener
+    const redisCtl = new Redis(config.redisUrl);
+
     const ctlStream = config.gateway_ctl;
     const ctlGroup = 'gateway-ctl-group';
     const ctlConsumer = 'gateway-ctl-1';
 
     // Ensure ctl group exists
     try {
-        await redis.xgroup('CREATE', ctlStream, ctlGroup, '$', 'MKSTREAM');
+        await redisCtl.xgroup('CREATE', ctlStream, ctlGroup, '$', 'MKSTREAM');
     } catch (err: any) {
         if (!err.message.includes('BUSYGROUP')) logger.error('Error creating ctl group:', err);
     }
@@ -87,7 +92,7 @@ async function startRecoveryTriggerListener(
 
     while (true) {
         try {
-            const result = await (redis as any).xreadgroup(
+            const result = await (redisCtl as any).xreadgroup(
                 'GROUP', ctlGroup, ctlConsumer,
                 'COUNT', 1, 'BLOCK', 0, 'STREAMS', ctlStream, '>'
             );
@@ -98,9 +103,9 @@ async function startRecoveryTriggerListener(
                     const actionIndex = fields.indexOf('action');
                     if (actionIndex !== -1 && fields[actionIndex + 1] === 'RECOVER_PENDING') {
                         logger.info(`Received recovery trigger from ${ctlStream} (ID: ${id})`);
-                        await processPendingMessages(redis, bot, sender, adminId, stream, group, consumer);
+                        await processPendingMessages(redisCtl, bot, sender, adminId, stream, group, consumer);
                     }
-                    await redis.xack(ctlStream, ctlGroup, id);
+                    await redisCtl.xack(ctlStream, ctlGroup, id);
                 }
             }
         } catch (err) {
