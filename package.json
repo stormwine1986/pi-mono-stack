@@ -4,5 +4,8 @@
     "workspaces": [
         "gateway",
         "pi-mono/packages/worker"
-    ]
+    ],
+    "scripts": {
+        "skill": ".pi/agent/bin/skill"
+    }
 }

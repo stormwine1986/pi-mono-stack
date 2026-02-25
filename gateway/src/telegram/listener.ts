@@ -111,7 +111,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
     ]);
 }
 
-const TG_API_TIMEOUT = 5_000; // 5s timeout for Telegram API calls
+const TG_API_TIMEOUT = 10_000; // 10s timeout for Telegram API calls
 
 /**
  * Process a single message: ACK first (at-most-once), then dispatch to Telegram.
@@ -135,12 +135,19 @@ async function processMessage(
         const response = JSON.parse(rawMessage) as WorkerResponse;
 
         if (response.status === 'success' || response.status === 'error') {
-            await withTimeout(
-                sender.sendAdminMessage(adminId,
-                    response.status === 'success' ? response.response : response.error
-                ),
-                TG_API_TIMEOUT, 'sendAdminMessage'
-            );
+            const text = (response.status === 'success' ? response.response : response.error) || '';
+            if (text.trim()) {
+                await withTimeout(
+                    sender.sendAdminMessage(adminId, text),
+                    TG_API_TIMEOUT, 'sendAdminMessage'
+                );
+            } else if (response.status === 'success' && (!response.images || response.images.length === 0)) {
+                // If success but absolutely no text and no images, send a fallback
+                await withTimeout(
+                    sender.sendAdminMessage(adminId, '✅ 任务已完成 (无返回文本)'),
+                    TG_API_TIMEOUT, 'sendAdminMessage'
+                );
+            }
 
             // Send attached images if present
             if (response.status === 'success' && response.images?.length) {

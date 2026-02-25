@@ -1,0 +1,289 @@
+#!/usr/bin/env node
+
+/**
+ * Tool Container Activation Procedure script.
+ * Usage: skill install <container_name>
+ */
+
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+const ARGS = process.argv.slice(2);
+const COMMAND = ARGS[0];
+const CONTAINER_NAME = ARGS[1];
+
+// Use environment variable for workspace dir, fallback to standard container path
+const WORKSPACE_DIR = process.env['PI-WORKSPACE-DIR'] || '/home/pi-mono/.pi/agent/workspace';
+const SKILLS_DIR = path.join(WORKSPACE_DIR, 'skills');
+const SKILLS_DB = path.join(SKILLS_DIR, 'registry.db');
+
+// Ensure database is initialized
+function initDb() {
+    if (!fs.existsSync(SKILLS_DIR)) {
+        fs.mkdirSync(SKILLS_DIR, { recursive: true });
+    }
+    const schema = `
+        CREATE TABLE IF NOT EXISTS active_skills (
+            container_name TEXT PRIMARY KEY,
+            image_build_time TEXT,
+            activation_time TEXT,
+            skill_path TEXT
+        );
+    `;
+    try {
+        execSync(`sqlite3 ${SKILLS_DB} "${schema}"`);
+    } catch (e) {
+        console.error(`\x1b[31m[Skill] Error initializing database: ${e.message}\x1b[0m`);
+    }
+}
+
+
+function showHelp() {
+    console.log('skill: Tool Container Activation & Skill Management');
+    console.log('\nUsage:');
+    console.log('  skill install <container_name>    Activate or update a tool container skill');
+    console.log('  skill ls [container_name]         List registered skills and their metadata');
+    console.log('  skill scan [container_name]       Check if tool containers are installed or expired');
+    console.log('                                    (Defaults to scanning all containers with label role=Tools)');
+    console.log('  skill status                      Check status of all registered tool containers');
+    console.log('\nOptions:');
+    console.log('  -h, --help                        Show this help message');
+    console.log('\nExamples:');
+    console.log('  skill install wikipedia');
+    console.log('  skill ls');
+    console.log('  skill scan wikipedia');
+    process.exit(0);
+}
+
+
+async function main() {
+    initDb();
+    if (ARGS.length === 0 || ARGS.includes('-h') || ARGS.includes('--help')) {
+        showHelp();
+    }
+
+    if (COMMAND === 'install' && CONTAINER_NAME) {
+        await installSkill(CONTAINER_NAME);
+    } else if (COMMAND === 'ls') {
+        await listSkills(CONTAINER_NAME);
+    } else if (COMMAND === 'scan') {
+        await scanSkill(CONTAINER_NAME);
+    } else if (COMMAND === 'status') {
+        await statusSkills();
+    } else {
+        console.error(`Error: Unknown command or missing arguments: ${ARGS.join(' ')}`);
+        console.log('Run "skill --help" for usage information.');
+        process.exit(1);
+    }
+}
+
+async function listSkills(name) {
+    try {
+        let query = "SELECT container_name, image_build_time, activation_time, skill_path FROM active_skills";
+        if (name) {
+            query += ` WHERE container_name = '${name}'`;
+        }
+        query += ";";
+
+        // Use -header and -column for a nice table output
+        const output = execSync(`sqlite3 -header -column ${SKILLS_DB} "${query}"`).toString().trim();
+
+        if (output) {
+            console.log(output);
+        } else {
+            if (name) {
+                console.log(`\x1b[33m[Skill] No registration found for container: ${name}\x1b[0m`);
+            } else {
+                console.log(`\x1b[33m[Skill] No active tool container registered in database.\x1b[0m`);
+            }
+        }
+    } catch (err) {
+        console.error(`\x1b[31m[Skill] Error listing skills: ${err.message}\x1b[0m`);
+        process.exit(1);
+    }
+}
+
+async function scanSkill(name) {
+    try {
+        let targets = [];
+        if (name) {
+            targets.push(name);
+        } else {
+            console.log(`\x1b[36m[Skill] Discovering tool containers (label: role=Tools)...\x1b[0m`);
+            const output = sh(`docker ps --filter "label=role=Tools" --format "{{.Names}}"`, { failSilently: true });
+            if (output) {
+                targets = output.split('\n').filter(Boolean);
+            }
+        }
+
+        if (targets.length === 0) {
+            console.log(`\x1b[33m[Skill] No suitable containers found for scanning.\x1b[0m`);
+            return;
+        }
+
+        for (const target of targets) {
+            console.log(`\x1b[94m-- Scanning: ${target} --\x1b[0m`);
+
+            // 1. Check if it is a tool container (has SKILL.md)
+            const skillPathInContainer = sh(`docker exec ${target} find /app -name SKILL.md`, { failSilently: true });
+
+            if (!skillPathInContainer) {
+                console.log(`\x1b[33m[Skill] Result: NOT a tool container (SKILL.md missing).\x1b[0m`);
+                continue;
+            }
+
+            // 2. Get current image build time
+            const imageName = sh(`docker inspect ${target} --format '{{.Config.Image}}'`, { failSilently: true }) || target;
+            const buildTimeRaw = sh(`docker inspect ${imageName} --format '{{.Created}}'`, { failSilently: true });
+
+            if (!buildTimeRaw) {
+                console.log(`\x1b[31m[Skill] Result: ERROR (Could not retrieve build time).\x1b[0m`);
+                continue;
+            }
+            const currentBuildTime = new Date(buildTimeRaw);
+
+            // 3. Query registration info
+            const query = `SELECT activation_time FROM active_skills WHERE container_name = '${target}';`;
+            const activationTimeStr = sh(`sqlite3 ${SKILLS_DB} "${query}"`, { failSilently: true });
+
+            if (!activationTimeStr) {
+                console.log(`\x1b[33m[Skill] Status: NOT REGISTERED. ("skill install ${target}")\x1b[0m`);
+                continue;
+            }
+
+            const activationTime = new Date(activationTimeStr);
+
+            // 4. Compare timestamps
+            if (currentBuildTime > activationTime) {
+                console.log(`\x1b[31m[Skill] Status: EXPIRED. (Re-activation required)\x1b[0m`);
+                console.log(`        Reg At: ${activationTime.toISOString().replace(/\.\d+Z$/, 'Z')} | Current: ${currentBuildTime.toISOString().replace(/\.\d+Z$/, 'Z')}`);
+            } else {
+                console.log(`\x1b[32m[Skill] Status: UP TO DATE.\x1b[0m`);
+            }
+        }
+
+    } catch (err) {
+        console.error(`\x1b[31m[Skill] Error during scan: ${err.message}\x1b[0m`);
+        process.exit(1);
+    }
+}
+async function statusSkills() {
+    try {
+        const query = "SELECT container_name, activation_time FROM active_skills;";
+        const rawRows = sh(`sqlite3 ${SKILLS_DB} "${query}"`, { failSilently: true });
+
+        if (!rawRows) {
+            console.log(`\x1b[33m[Skill] No registered tool containers found in database.\x1b[0m`);
+            return;
+        }
+
+        const rows = rawRows.split('\n').filter(l => l.trim()).map(line => {
+            const [name, activationTime] = line.split('|');
+            return { name, activationTime: new Date(activationTime) };
+        });
+
+        const pad = (str, len) => str.padEnd(len).substring(0, len);
+
+        console.log(`\x1b[36m${pad("Container", 20)} ${pad("Running", 10)} ${pad("Up-to-date", 12)} ${pad("File", 10)} ${pad("Status", 10)}\x1b[0m`);
+        console.log("-".repeat(65));
+
+        for (const row of rows) {
+            const name = row.name;
+            const activationTime = row.activationTime;
+
+            // 1. Check if running
+            const runningRaw = sh(`docker inspect -f '{{.State.Running}}' ${name}`, { failSilently: true });
+            const isRunning = runningRaw === 'true';
+
+            // 2. Check if expired
+            let isUpToDate = false;
+            const imageName = sh(`docker inspect ${name} --format '{{.Config.Image}}'`, { failSilently: true }) || name;
+            const buildTimeRaw = sh(`docker inspect ${imageName} --format '{{.Created}}'`, { failSilently: true });
+            if (buildTimeRaw) {
+                const currentBuildTime = new Date(buildTimeRaw);
+                isUpToDate = currentBuildTime <= activationTime;
+            }
+
+            // 3. Check if file exists
+            const filePath = path.join(SKILLS_DIR, name, 'SKILL.md');
+            const fileExists = fs.existsSync(filePath);
+
+            // 4. Overall Status
+            const isReady = isRunning && isUpToDate && fileExists;
+
+            const color = isReady ? "\x1b[32m" : "\x1b[31m";
+            const reset = "\x1b[0m";
+
+            console.log(
+                `${pad(name, 20)} ${pad(isRunning ? "Yes" : "No", 10)} ${pad(isUpToDate ? "Yes" : "No", 12)} ${pad(fileExists ? "Exists" : "Missing", 10)} ${color}${pad(isReady ? "Ready" : "Faulty", 10)}${reset}`
+            );
+        }
+    } catch (err) {
+        console.error(`\x1b[31m[Skill] Error during status check: ${err.message}\x1b[0m`);
+        process.exit(1);
+    }
+}
+
+
+
+// Helper to run shell commands and return output or throw with custom message
+function sh(cmd, options = {}) {
+    try {
+        return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'], ...options }).toString().trim();
+    } catch (e) {
+        if (options.failSilently) return null;
+        throw new Error(options.errorMsg || `Command failed: ${cmd}`);
+    }
+}
+
+async function installSkill(name) {
+    try {
+        console.log(`\x1b[36m[Skill] Activation procedure started for container: ${name}...\x1b[0m`);
+
+        // 1. Ensure container is running and find SKILL.md
+        console.log(`\x1b[36m[Skill] Searching for SKILL.md in container ${name}...\x1b[0m`);
+        const skillPathInContainer = sh(`docker exec ${name} find /app -name SKILL.md`, {
+            errorMsg: `Container "${name}" is not running or SKILL.md not found inside it. Please start the container first.`
+        });
+        console.log(`\x1b[36m[Skill] Found SKILL.md at: ${skillPathInContainer}\x1b[0m`);
+
+        // 2. Extract content
+        console.log(`\x1b[36m[Skill] Extracting content...\x1b[0m`);
+        const content = sh(`docker exec ${name} cat ${skillPathInContainer}`, {
+            errorMsg: `Failed to extract SKILL.md from container "${name}"`
+        });
+
+        // 3. Save to workspace
+        const targetDir = path.join(SKILLS_DIR, name);
+        if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+        const targetFile = path.join(targetDir, 'SKILL.md');
+        fs.writeFileSync(targetFile, content);
+        console.log(`\x1b[32m[Skill] Successfully saved SKILL.md to ${targetFile}\x1b[0m`);
+
+        // 4. Gather metadata
+        console.log(`\x1b[36m[Skill] Retrieving image metadata...\x1b[0m`);
+        const activationTime = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+        let buildTime = 'Unknown';
+
+        const imageName = sh(`docker inspect ${name} --format '{{.Config.Image}}'`, { failSilently: true })
+            || `pi-mono-stack-${name}`;
+
+        const buildTimeRaw = sh(`docker inspect ${imageName} --format '{{.Created}}'`, { failSilently: true });
+        if (buildTimeRaw) buildTime = new Date(buildTimeRaw).toISOString().replace(/\.\d+Z$/, 'Z');
+
+        // 5. Update Registration (SQLite & ACTIVE.md)
+        console.log(`\x1b[36m[Skill] Updating registration data...\x1b[0m`);
+        const skillPath = `skills/${name}/SKILL.md`;
+        const sql = `INSERT OR REPLACE INTO active_skills (container_name, image_build_time, activation_time, skill_path) VALUES ('${name}', '${buildTime}', '${activationTime}', '${skillPath}');`;
+
+        execSync(`sqlite3 ${SKILLS_DB} "${sql}"`);
+
+        console.log(`\x1b[32m[Skill] DONE. Container ${name} is now ACTIVE.\x1b[0m`);
+    } catch (err) {
+        console.error(`\x1b[31m[Skill] Error: ${err.message}\x1b[0m`);
+        process.exit(1);
+    }
+}
+
+main();
