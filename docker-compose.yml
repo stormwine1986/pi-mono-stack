@@ -19,6 +19,11 @@ services:
       - redis
     environment:
       - REDIS_URL=redis://127.0.0.1:6379
+      - RCLONE_CONFIG_S3_TYPE=s3
+      - RCLONE_CONFIG_S3_PROVIDER=Other
+      - RCLONE_CONFIG_S3_ACCESS_KEY_ID
+      - RCLONE_CONFIG_S3_SECRET_ACCESS_KEY
+      - RCLONE_CONFIG_S3_ENDPOINT=https://pi.taileb0a7.ts.net:3900
     volumes:
       - ./.pi:/home/pi-mono/.pi
       - /var/run/docker.sock:/var/run/docker.sock

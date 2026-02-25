@@ -18,6 +18,8 @@ load_secrets() {
   export TAVILY_API_KEY="$(pass show TAVILY_API_KEY)"
   export GITHUB_TOKEN="$(pass show GITHUB_TOKEN)"
   export TWITTERAPI_KEY="$(pass show TWITTERAPI_KEY)"
+  export RCLONE_CONFIG_S3_ACCESS_KEY_ID="$(pass show RCLONE_CONFIG_S3_ACCESS_KEY_ID)"
+  export RCLONE_CONFIG_S3_SECRET_ACCESS_KEY="$(pass show RCLONE_CONFIG_S3_SECRET_ACCESS_KEY)"
   echo "✅ Secrets loaded."
 }
 
