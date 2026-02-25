@@ -45,6 +45,7 @@ services:
       - TELEGRAM_TOKEN
       - REDIS_URL=redis://127.0.0.1:6379
       - TG_ADMIN_ID=7722403902
+      - DKRON_URL=http://127.0.0.1:18047/v1
 
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.81.9-nightly

@@ -6,7 +6,6 @@ import { logger } from '../logger.js';
 import { TelegramSender } from './sender.js';
 
 const BLOCK_TIMEOUT_MS = 5000;       // Don't block forever; poll every 5s
-const PENDING_CLAIM_INTERVAL = 30;   // Reclaim pending messages every N iterations
 const PENDING_IDLE_MS = 60_000;      // Claim messages idle for > 60s
 
 export async function startResultListener(
@@ -41,15 +40,12 @@ export async function startResultListener(
     // Phase 1: Process any pending messages from previous runs
     await processPendingMessages(redisConsumer, bot, sender, adminId, stream, group, consumer);
 
-    // Phase 2: Main loop — read new messages + periodic pending reclaim
-    let iteration = 0;
+    // Phase 2: Start a separate loop to listen for external recovery triggers (from Dkron)
+    startRecoveryTriggerListener(redisConsumer, bot, sender, adminId, stream, group, consumer);
+
+    // Phase 3: Main loop — read new messages
     while (true) {
         try {
-            // Periodically reclaim stale pending messages
-            if (++iteration % PENDING_CLAIM_INTERVAL === 0) {
-                await processPendingMessages(redisConsumer, bot, sender, adminId, stream, group, consumer);
-            }
-
             const result = await (redisConsumer as any).xreadgroup(
                 'GROUP', group, consumer,
                 'COUNT', 10, 'BLOCK', BLOCK_TIMEOUT_MS, 'STREAMS', stream, '>'
@@ -64,6 +60,52 @@ export async function startResultListener(
         } catch (error) {
             logger.error('Error in result listener loop:', error);
             await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
+}
+
+/**
+ * Listens for recovery signals on config.gateway_ctl to trigger manual pending recovery.
+ * This is meant to be driven by a Dkron periodic job.
+ */
+async function startRecoveryTriggerListener(
+    redis: Redis, bot: Telegraf, sender: TelegramSender,
+    adminId: number, stream: string, group: string, consumer: string
+) {
+    const ctlStream = config.gateway_ctl;
+    const ctlGroup = 'gateway-ctl-group';
+    const ctlConsumer = 'gateway-ctl-1';
+
+    // Ensure ctl group exists
+    try {
+        await redis.xgroup('CREATE', ctlStream, ctlGroup, '$', 'MKSTREAM');
+    } catch (err: any) {
+        if (!err.message.includes('BUSYGROUP')) logger.error('Error creating ctl group:', err);
+    }
+
+    logger.info(`Starting recovery trigger listener on ${ctlStream}...`);
+
+    while (true) {
+        try {
+            const result = await (redis as any).xreadgroup(
+                'GROUP', ctlGroup, ctlConsumer,
+                'COUNT', 1, 'BLOCK', 0, 'STREAMS', ctlStream, '>'
+            );
+
+            if (result && result.length > 0) {
+                const [, messages] = result[0];
+                for (const [id, fields] of messages) {
+                    const actionIndex = fields.indexOf('action');
+                    if (actionIndex !== -1 && fields[actionIndex + 1] === 'RECOVER_PENDING') {
+                        logger.info(`Received recovery trigger from ${ctlStream} (ID: ${id})`);
+                        await processPendingMessages(redis, bot, sender, adminId, stream, group, consumer);
+                    }
+                    await redis.xack(ctlStream, ctlGroup, id);
+                }
+            }
+        } catch (err) {
+            logger.error('Error in recovery trigger listener:', err);
+            await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
 }

@@ -26,8 +26,8 @@ COPY --from=builder /app/dkron-executor-reminder /usr/local/bin/
 RUN chmod +x /usr/local/bin/dkron-executor-background
 RUN chmod +x /usr/local/bin/dkron-executor-reminder
 
-# Install dependencies: curl, docker-cli
-RUN apk add --no-cache curl docker-cli
+# Install dependencies: curl, docker-cli, redis
+RUN apk add --no-cache curl docker-cli redis
 
 # Set Environment Variables
 ENV GODEBUG=netdns=go

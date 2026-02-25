@@ -8,6 +8,7 @@ import { TelegramSender } from './telegram/sender.js';
 import { startResultListener } from './telegram/listener.js';
 import { startDkronListener } from './dkron/listener.js';
 import { startReminderListener } from './dkron/reminder.js';
+import { setupRecoveryJob } from './dkron/setup.js';
 import { logger } from './logger.js';
 
 const WORKSPACE_DIR = '/home/pi-mono/.pi/agent/workspace';
@@ -146,6 +147,9 @@ async function main() {
         startResultListener(bot, sender, redisConsumer);
         startDkronListener(redisProducer, redisDkronConsumer, sender);
         startReminderListener(redisProducer, redisReminderConsumer, sender);
+
+        // Setup Dkron jobs
+        setupRecoveryJob();
 
         const stop = () => {
             bot.stop();

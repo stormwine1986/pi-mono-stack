@@ -6,9 +6,11 @@ export const config = {
     agent_ctl: 'agent_ctl',
     background_out: 'background_out',
     reminder_out: 'reminder_out',
+    gateway_ctl: 'gateway_ctl',
     tgConsumerGroup: 'tg-bot',
     tgConsumerName: 'bot-1',
     dkronConsumerGroup: 'gateway-dkron',
     dkronConsumerName: 'gateway-1',
     adminId: parseInt(process.env.TG_ADMIN_ID || '0'),
+    dkronUrl: process.env.DKRON_URL || 'http://127.0.0.1:18047/v1',
 };
