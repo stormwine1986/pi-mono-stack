@@ -141,7 +141,10 @@ async function main() {
         ]);
         logger.info('TG Bot commands registered');
 
-        bot.launch();
+        bot.launch({
+            allowedUpdates: ['message', 'callback_query', 'photo'] as any,
+            dropPendingUpdates: true
+        });
         logger.info('TG Bot launched successfully');
 
         startResultListener(bot, sender, redisConsumer);
