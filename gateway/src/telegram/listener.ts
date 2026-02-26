@@ -169,55 +169,78 @@ async function processMessage(
     redis: Redis, bot: Telegraf, sender: TelegramSender,
     adminId: number, stream: string, group: string
 ) {
-    // ACK immediately to prevent re-delivery blocking
-    await redis.xack(stream, group, id);
-
     const dataIndex = fields.indexOf('payload');
-    if (dataIndex === -1) return;
+    if (dataIndex === -1) {
+        await redis.xack(stream, group, id);
+        return;
+    }
 
     const rawMessage = fields[dataIndex + 1];
+    let response: WorkerResponse;
+    try {
+        response = JSON.parse(rawMessage) as WorkerResponse;
+    } catch (err) {
+        logger.error(`Failed to parse message ${id}:`, err);
+        await redis.xack(stream, group, id);
+        return;
+    }
+
     logger.info(`Processing message ${id}: ${rawMessage}`);
 
-    try {
-        const response = JSON.parse(rawMessage) as WorkerResponse;
+    const maxRetries = 3;
+    let attempt = 0;
+    let success = false;
 
-        if (response.status === 'success' || response.status === 'error') {
-            const text = (response.status === 'success' ? response.response : response.error) || '';
-            if (text.trim()) {
-                await withTimeout(
-                    sender.sendAdminMessage(adminId, text),
-                    TG_API_TIMEOUT, 'sendAdminMessage'
-                );
-            } else if (response.status === 'success' && (!response.images || response.images.length === 0)) {
-                // If success but absolutely no text and no images, send a fallback
-                await withTimeout(
-                    sender.sendAdminMessage(adminId, '✅ 任务已完成 (无返回文本)'),
-                    TG_API_TIMEOUT, 'sendAdminMessage'
-                );
-            }
-
-            // Send attached images if present
-            if (response.status === 'success' && response.images?.length) {
-                for (const imagePath of response.images) {
+    while (attempt < maxRetries && !success) {
+        attempt++;
+        try {
+            if (response.status === 'success' || response.status === 'error') {
+                const text = (response.status === 'success' ? response.response : response.error) || '';
+                if (text.trim()) {
                     await withTimeout(
-                        sender.sendAdminPhoto(adminId, imagePath),
-                        TG_API_TIMEOUT, 'sendAdminPhoto'
+                        sender.sendAdminMessage(adminId, text),
+                        TG_API_TIMEOUT, 'sendAdminMessage'
+                    );
+                } else if (response.status === 'success' && (!response.images || response.images.length === 0)) {
+                    // If success but absolutely no text and no images, send a fallback
+                    await withTimeout(
+                        sender.sendAdminMessage(adminId, '✅ 任务已完成 (无返回文本)'),
+                        TG_API_TIMEOUT, 'sendAdminMessage'
                     );
                 }
+
+                // Send attached images if present
+                if (response.status === 'success' && response.images?.length) {
+                    for (const imagePath of response.images) {
+                        await withTimeout(
+                            sender.sendAdminPhoto(adminId, imagePath),
+                            TG_API_TIMEOUT, 'sendAdminPhoto'
+                        );
+                    }
+                }
+            } else if (response.status === 'progress') {
+                if (response.event === 'send_media' && response.data?.path) {
+                    await withTimeout(
+                        sender.sendAdminPhoto(adminId, response.data.path),
+                        TG_API_TIMEOUT, 'sendAdminPhoto'
+                    );
+                } else {
+                    // Fire-and-forget: typing indicator is non-critical, never block the loop
+                    bot.telegram.sendChatAction(adminId, 'typing').catch(() => { });
+                }
             }
-        } else if (response.status === 'progress') {
-            if (response.event === 'send_media' && response.data?.path) {
-                await withTimeout(
-                    sender.sendAdminPhoto(adminId, response.data.path),
-                    TG_API_TIMEOUT, 'sendAdminPhoto'
-                );
+            success = true;
+        } catch (err) {
+            logger.error(`Attempt ${attempt} failed to process message ${id}:`, err);
+            if (attempt < maxRetries) {
+                // Exponential-ish backoff: 1s, 2s...
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
             } else {
-                // Fire-and-forget: typing indicator is non-critical, never block the loop
-                bot.telegram.sendChatAction(adminId, 'typing').catch(() => { });
+                logger.error(`Final failure for message ${id} after ${maxRetries} attempts.`);
             }
         }
-    } catch (err) {
-        logger.error(`Failed to process message ${id}:`, err);
-        // Message already ACK'd — log and move on, don't block the loop
     }
+
+    // ACK after success OR max retries exhausted (to prevent stuck queue)
+    await redis.xack(stream, group, id);
 }

@@ -77,6 +77,7 @@ export class TelegramSender {
                     await this.bot.telegram.sendMessage(adminId, text);
                 } else {
                     logger.error('Failed to send plain text chunk:', err);
+                    throw err;
                 }
             }
         };
@@ -115,7 +116,8 @@ export class TelegramSender {
             logger.info(`Photo sent to admin: ${relativePath}`);
         } catch (err) {
             logger.error(`Failed to send photo ${relativePath}:`, err);
-            await this.sendAdminMessage(adminId, `⚠️ 图片发送失败: ${relativePath}`);
+            await this.sendAdminMessage(adminId, `⚠️ 图片发送失败: ${relativePath}`).catch(() => { });
+            throw err;
         }
     }
 
