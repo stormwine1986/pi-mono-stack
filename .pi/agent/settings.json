@@ -1,5 +1,5 @@
 {
   "defaultProvider": "litellm",
-  "defaultModel": "kimi-k2.5",
+  "defaultModel": "gemini-3-flash-preview",
   "defaultThinkingLevel": "low"
 }

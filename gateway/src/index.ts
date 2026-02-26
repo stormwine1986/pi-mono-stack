@@ -37,6 +37,7 @@ bot.command('stop', async (ctx) => {
     const signal: WorkerControlSignal = { command: 'stop' };
     logger.info(`Publishing control signal to ${config.agent_ctl}: stop`);
     await redisProducer.publish(config.agent_ctl, JSON.stringify(signal));
+    ctx.sendChatAction('typing').catch(() => { });
 });
 
 bot.command('new', async (ctx) => {
@@ -44,6 +45,7 @@ bot.command('new', async (ctx) => {
     logger.info(`Publishing control signal to ${config.agent_ctl}: reset`);
     await redisProducer.publish(config.agent_ctl, JSON.stringify(signal));
     await ctx.reply('✅ 新会话开始');
+    ctx.sendChatAction('typing').catch(() => { });
 });
 
 bot.command('steer', async (ctx) => {
@@ -55,6 +57,7 @@ bot.command('steer', async (ctx) => {
 
     logger.info(`Publishing steer signal to ${config.agent_ctl}: ${message}`);
     await redisProducer.publish(config.agent_ctl, JSON.stringify(signal));
+    ctx.sendChatAction('typing').catch(() => { });
 });
 
 // 2. Handle photo messages
