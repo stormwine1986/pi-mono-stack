@@ -1,9 +1,12 @@
 services:
   redis:
-    image: redis:7-alpine
+    image: falkordb/falkordb:edge-alpine
     container_name: redis
+    environment:
+      - PORT=13000
+      - REDIS_ARGS=--appendonly yes --dir /var/lib/falkordb/data
     volumes:
-      - redis_data:/data
+      - redis_data:/var/lib/falkordb/data
     restart: unless-stopped
     network_mode: host
 
