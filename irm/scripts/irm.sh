@@ -13,6 +13,12 @@ case "$COMMAND" in
     advisor)
         python3 /app/scripts/analyzer/portfolio_advisor.py "$@"
         ;;
+    portfolio)
+        python3 /app/scripts/analyzer/portfolio_viewer.py "$@"
+        ;;
+    nodes)
+        python3 /app/scripts/analyzer/node_viewer.py "$@"
+        ;;
     init-db)
         python3 /app/scripts/ontology/sync_schema.py "$@"
         ;;
@@ -21,9 +27,11 @@ case "$COMMAND" in
         echo "Usage: irm <command> [options]"
         echo ""
         echo "Available Commands:"
-        echo "  tracer   - Trace macro-to-micro impact propagation"
-        echo "  advisor  - Get Kelly-based portfolio allocation advice"
-        echo "  init-db  - Sync/Initialize graph schema from SCHEMA.cypher"
+        echo "  tracer    - Trace macro-to-micro impact propagation"
+        echo "  advisor   - Get Kelly-based portfolio allocation advice"
+        echo "  portfolio - List asset allocation status for a specified owner"
+        echo "  nodes     - List all entities in the graph (excluding portfolios)"
+        echo "  init-db   - Sync/Initialize graph schema from SCHEMA.cypher"
         echo ""
         echo "Use 'irm <command> --help' for more information on a specific command."
         ;;

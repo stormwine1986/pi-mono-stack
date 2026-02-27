@@ -54,9 +54,12 @@ class IRMTracer:
         return portfolio
 
     def get_neighbors(self, ticker):
-        """Find nodes impacted by the given ticker and return edge attributes."""
-        # Query for outgoing relationships. Support Hubs that use 'name' as unique identifier instead of 'ticker'
-        cypher = f"MATCH (n)-[r]->(m) WHERE COALESCE(n.ticker, n.name) = '{ticker}' RETURN COALESCE(m.ticker, m.name), type(r), r.base_beta, r.gamma_sensitive, r.state_trigger, labels(m)[0]"
+        """Find nodes impacted by the given ticker and return edge attributes + target node state."""
+        cypher = (
+            f"MATCH (n)-[r]->(m) WHERE COALESCE(n.ticker, n.name) = '{ticker}' "
+            f"RETURN COALESCE(m.ticker, m.name), type(r), r.base_beta, r.gamma_sensitive, "
+            f"r.state_trigger, labels(m)[0], m.percentile, r.modifier_metric, r.threshold_config"
+        )
         result = self._query_falkor(cypher)
         
         neighbors = []
@@ -65,28 +68,47 @@ class IRMTracer:
 
         for row in result.result_set:
             try:
-                neighbor = {
+                neighbors.append({
                     "ticker": row[0],
                     "rel_type": row[1],
                     "base_beta": float(row[2]) if row[2] is not None else 1.0,
                     "gamma_sensitive": str(row[3]).lower() == 'true',
                     "state_trigger": row[4],
-                    "label": row[5]
-                }
-                neighbors.append(neighbor)
+                    "label": row[5],
+                    "target_percentile": float(row[6]) if row[6] is not None else None,
+                    "modifier_metric": row[7],
+                    "threshold_config": row[8] if len(row) > 8 else None
+                })
             except (ValueError, IndexError, TypeError):
                 continue
         return neighbors
 
-    def trace_impact(self, start_ticker, initial_delta, mock_vix=20, mock_states=None):
+    def _calculate_mu(self, percentile, threshold_config_str):
         """
-        Trace the impact from a starting ticker throughout the graph.
-        Formula: Impact = Source_Delta * (Beta * Modifier * Gamma) * Decay
+        Dynamically calculate the State Modifier (mu) based on JSON threshold rules.
         """
-        if mock_states is None:
-            mock_states = {}
+        if percentile is None or not threshold_config_str:
+            return 1.0
 
-        # Use BFS to find all paths. Queue stores: (current_ticker, incoming_impact, depth, path_string)
+        try:
+            rules = json.loads(threshold_config_str)
+            for rule in rules:
+                min_val = rule.get("min", -float('inf'))
+                max_val = rule.get("max", float('inf'))
+                if min_val <= percentile < max_val:
+                    return float(rule.get("mu", 1.0))
+        except Exception as e:
+            pass
+            
+        return 1.0
+
+    def trace_impact(self, start_ticker, initial_delta, current_vix=20):
+        """
+        Trace the impact with dynamic state modifiers.
+        Formula: Impact = Source_Delta * (Beta * Mu(Path, State) * Gamma) * Decay
+        """
+
+        # Queue stores: (current_ticker, incoming_impact, depth, path_string)
         queue = [(start_ticker, float(initial_delta), 0, start_ticker)]
         results = []
 
@@ -96,38 +118,27 @@ class IRMTracer:
         while queue:
             current_ticker, incoming_impact, depth, path_str = queue.pop(0)
             
-            # Find neighbors
             neighbors = self.get_neighbors(current_ticker)
             
             for n in neighbors:
                 target = n['ticker']
+                if target in path_str.split(" -> ") or depth >= 5: continue
                 
-                # Check for cycles or overly deep traversals
-                if target in path_str.split(" -> ") or depth >= 5:
-                    continue
-                
-                # 1. Calculation: Base Beta
+                # 1. Base Beta
                 beta = n['base_beta']
                 
-                # 2. Calculation: Gamma (Volatility Accelerator)
+                # 2. Gamma (Volatility Accelerator)
                 gamma = 1.0
-                if n['gamma_sensitive'] and mock_vix > 30:
-                    gamma = 1.5  # Simple jump for now
-                    if mock_vix > 40: gamma = 2.0
+                if n['gamma_sensitive'] and current_vix > 30:
+                    gamma = 1.5 if current_vix <= 45 else 2.5
                 
-                # 3. Calculation: State Modifier (mu)
-                mu = 1.0
-                trigger = n['state_trigger']
-                if trigger in mock_states:
-                    mu = mock_states[trigger]
+                # 3. DYNAMIC State Modifier (mu) - JSON Config Driven!
+                mu = self._calculate_mu(n['target_percentile'], n.get('threshold_config'))
                 
-                # 4. Calculation: Distance Decay
+                # 4. Distance Decay
                 d_factor = self.decay_factor ** depth
                 
-                # IMPORTANT: Impact is multiplicative along the path!
-                # The node's structural change is its incoming impact multiplied by the transmission factors.
-                step_transmission_power = beta * mu * gamma * d_factor
-                impact = incoming_impact * step_transmission_power
+                impact = incoming_impact * (beta * mu * gamma) * d_factor
                 
                 new_path_str = f"{path_str} -> {target}"
                 
@@ -159,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("--ticker", required=True, help="Source ticker (e.g., US10Y)")
     parser.add_argument("--delta", type=float, default=1.0, help="Initial shock percentage (e.g., 1.0 for +1%)")
     parser.add_argument("--vix", type=float, default=20, help="Current VIX level")
-    parser.add_argument("--owner", type=str, default="Pei Jia", help="Portfolio Owner")
+    parser.add_argument("--owner", type=str, default="Admin", help="Portfolio Owner")
     
     args = parser.parse_args()
     
@@ -173,21 +184,8 @@ if __name__ == "__main__":
     else:
          portfolio_assets = list(portfolio.keys())
          
-    # 2. Mathematical Operators (Universal State Modifiers)
-    # In a real system, these would read the 'target_percentile' dynamically from the target node.
-    # For this CLI mock, we pass in assumed values manually.
-    mu_val_amplifier = 3.0 if args.delta > 0.5 else 1.0
-    mu_val_dampener = 0.2 if args.delta > 0 else 1.0  # dampen shocks
-    mu_val_breaker = 1.0 if args.delta > 0 else 0.0
-
-    states = {
-        "percentile_amplifier": mu_val_amplifier,
-        "margin_dampener": mu_val_dampener,
-        "threshold_breaker": mu_val_breaker
-    }
-    
-    # 3. Run Trace
-    impacts = tracer.trace_impact(args.ticker, args.delta, mock_vix=args.vix, mock_states=states)
+    # 3. Run Trace - Now with dynamic internal path-specific logic
+    impacts = tracer.trace_impact(args.ticker, args.delta, current_vix=args.vix)
     
     # 4. Aggregate Portfolio Summary
     print("\n" + "="*20 + " PORTFOLIO IMPACT SUMMARY " + "="*20)

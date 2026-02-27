@@ -22,7 +22,8 @@
         *   `PE` (市盈率/估值倍数枢纽)：流动性与风险的天然接收器。负责吸收美国10年期国债收益率（贴现率）和 VIX（风险溢价）的变动，将其转化为资产估值倍数的收缩或扩张。
         *   `EPS` (每股收益/盈利预期枢纽)：实体经济与商业周期的传导接收器。吸收美元指数（汇兑利润）、大宗商品（成本）以及产业主题（海量订单）带来的冲击，转化为资产实际盈利基准的上调或下调。
     *   `Portfolio` (个人账户)：系统的“终局终端”。代表用户的资金分部、平均成本和当前持仓权重，是所有风控建议的目标。
-    *   `Event` (扰动源)：传导链条的“第一推动力”。通常由微观或宏观突发新闻触发，通过 LLM 注入图谱引发波及。
+*   **虚拟代理 (Virtual Proxy)**
+    *   `Event` (扰动源)：传导链条的“第一推动力”。它不是图中的持久化物理节点，而是由微观或宏观新闻触发，通过 LLM 解析为虚拟节点后，对图谱内的目标物理节点发起一阶冲击的计算入口点。
 *   **边 (Edges - 关系与业务传导含义)**
     *   `DRIVES` (宏观驱动)：描绘金融市场的“第一推动力”（如：油价驱动通胀预期，推高美债收益率信号）。
     *   `SPILLS_TO` (风险溢出)：描述由于市场脆弱性或恐慌导致的跨界传染（如：债市剧震引爆股市 VIX 飙升）。
@@ -131,24 +132,24 @@
 *   **架构解耦原则（Node vs Edge）**：在系统设计中，**节点（Node）**仅包含客观的物理属性和当前状态值（如 PE 枢纽自带的 `percentile` 属性）；而**边（Edge）**承载传导计算规律。因此，所有的非线性修饰器（`state_trigger`）和引擎抓取准星（`modifier_metric`）均挂载在边上，由图遍历引擎主动感知并触发计算。
 *   **物理意义**：基于目标节点 **当前水位（如历史分位 - percentile）** 的非线性放大器。它是对当前市场环境“极值状态”与“机制转换”的刻画。这在 PE（估值倍数）等本身具有分布特征的基本面指标上体现得尤为明显。
 *   **设计原理**：当一个指标处于极低位置和处于极高位置时，它对边际利空的防御力是完全不对称的。“常态线性传导”与“泡沫黑天鹅传导”的差别就体现在这个阈值开关上。
-*   **计算方式 (引擎侧)**：
-    1.  图遍历引擎沿着边（如 `PRICES`）传递冲击时，读取边上的 `modifier_metric: 'target_percentile'` 指令。
-    2.  根据指令，引擎主动去提取目标节点（如 PE 枢纽）当前的客观水位值（如 `percentile=0.99`）。
-    3.  结合边上的 `state_trigger` 策略函数（例如 `percentile_amplifier` 或 `margin_dampener`），将分位数映射为一个非线性乘数。
-*   **作用**：让线性拓扑网络获得捕捉 **Regime-Switching（状态切换）** 和感知**“安全边际”**的能力，同时完美保证了“数据层（客观状态）”与“逻辑层（传导效应）”的代码解耦。
+*   **计算方式 (配置驱动引擎侧)**：
+    1.  图遍历引擎沿着边（如 `PRICES`）传递冲击时，不再执行任何业务硬编码。它直接读取边上的 `threshold_config` (一段定义了区间的 JSON)。
+    2.  引擎提取目标节点（如 PE 枢纽）当前的客观水位值（如 `percentile=0.99`）。
+    3.  通过简单的数值区间匹配（如落入 `[0.95, 1.0]` 区间），引擎得出当前的非线性修饰乘数 $\mu$。
+*   **作用**：让线性拓扑网络获得捕捉 **Regime-Switching（状态切换）** 和感知**“安全边际”**的能力，同时完美保证了“数据层（客观状态）”与“逻辑层（计算规则）”在代码上的绝对解耦。
 
-##### 三大通用数学算子 (Universal Mathematical Operators)
-为了确保计算引擎的可扩展性，避免硬编码具体的业务逻辑（如“AI泡沫”或“通胀危机”），图谱中的 `state_trigger` 被抽象为了以下 3 种纯数学算子，统一挂载在边上：
+##### 三大典型阈值设计模式 (Threshold Design Patterns)
+为了使风控逻辑清晰可读，通过配置上述的 JSON 阈值，我们在业务上定义了以下 3 种典型的数据分布模式（它们亦被记录在边上的 `state_trigger` 字段中，供人类或 LLM 快速理解）：
 
-1.  **`percentile_amplifier` (极位指数放大器)**
-    *   **数学含义**：当抓取到的底层目标节点处于**超高分位（> 85% 临界点）**时，乘数 $\mu$ 呈陡峭的指数级放大（如 1.5倍、3.0倍甚至更高）。
+1.  **`percentile_amplifier` (极位指数放大器模式)**
+    *   **配置特征**：当目标水位越高时，`mu` 呈现陡峭的台阶式上升（如 >=85% 设为 2.0，>=95% 设为 4.0）。
     *   **应用场景**：主要用于防范**“拥挤踩踏杀估值”**。例如应对 US10Y 冲击高估值的 NVDA/PLTR 时，或高油价引发通胀恐慌时。在极值区，即便是微小的边际利空，也会被视为压倒骆驼的最后一根稻草，引爆极高的非线性破坏力。
-2.  **`margin_dampener` (安全边际与低位钝化器)**
-    *   **数学含义**：当目标节点处于**极低分位（< 15%）**时，乘数急剧收缩（$\mu < 1$，例如 0.2 或 0.5）。
+2.  **`margin_dampener` (安全边际与低位钝化器模式)**
+    *   **配置特征**：当目标水位越低时，`mu` 急剧收缩（如 <=15% 设为 0.25）。
     *   **应用场景**：代表价值投资中的**“跌无可跌 (Price in)”**。只要大盘蓝筹资产（如 AAPL/GOOGL 的估值）跌到了历史极寒水位，它就会像海绵一样吸收并过滤上游传来的冲击，不再将恐慌等比传导至资产组合端，模拟“避险资金最后堡垒”的抗跌性。
-3.  **`threshold_breaker` (阈值断路器 / 阶跃跃迁器)**
-    *   **数学含义**：这是一种阶跃函数（Step Function）。正常状态下 $\mu = 0$ 或是极小的常态值，一旦源头节点突破某个**特定绝对阈值**，立刻触发 $\mu \ge 1.0$ 的暴力传导跨越。
-    *   **应用场景**：不看历史百分位，只看**绝对阈值是否被切线突破**。例如，当实际利率（名义利率 - 通胀预期）跨越某个临界点时，资金将成群结队地无情抛弃黄金回流生息资产，此时直接触发价值重估机制。
+3.  **`threshold_breaker` (阈值断路器 / 阶跃跃迁器模式)**
+    *   **配置特征**：不再关注平滑过渡。某特定点位之下 `mu` 为极小的常态值，一旦跨越临界值，直接跳跃至 `mu >= 1.0`。
+    *   **应用场景**：代表**宏观范式的突破或是心理红线**。例如，当实际利率（名义利率 - 通胀预期）跨越某个临界点时，资金将成群结队地无情抛弃黄金回流生息资产，此时直接触发价值重估机制。
 
 #### 3.1.3 Volatility Accelerator (波动率加速器 / Gamma 因子 $\gamma$)
 *   **物理意义**：市场恐慌情绪导致的流动性溢价与抛售踩踏效应。
@@ -219,9 +220,9 @@ $$Impact(B) = \Delta A \times \Big( \beta \times \mu(A_{current\_state}) \times 
 *   **引擎推导结果**：EPS 枢纽冲击负荷 $= -5.0 \times 0.8 \times 1.2 = \mathbf{-4.8}$。
 
 **2. 路径二 (流动性侧)：通胀预期推高利率，打击 PE 枢纽**
-*   **第一幕 (`Oil -> US10Y`)**：由于油价本身处于95%极高分位，边上挂载的 `percentile_amplifier` 断路器被触发。原本线性的恐慌被转化为指数级冲击，推算 `US10Y` 将被暴力推高。
-*   **第二幕 (`US10Y -> PE_DAL`)**：DAL 作为传统价值股，虽然遭遇宏观贴现率上行的打击。但由于引擎通过 `modifier_metric` 读取到其 PE 水位仅为极为便宜的 `15%`，直接触发了 `margin_dampener` (低位钝化器) 效应。引擎将乘数 $\mu$ 下调至 0.25 的“抗跌海绵区”。
-*   **引擎推导结果**：尽管宏观资金面崩塌，其杀估值效应被其自身的“厚实安全垫”极大地过滤阻绝。最终 PE 枢纽受到的冲击负荷仅为 $\mathbf{-1.2}$。
+*   **第一幕 (`Oil -> US10Y`)**：由于油价本身处于95%极高分位，落入了边上 `threshold_config` 中配置的极值区间（对应语义标签 `percentile_amplifier`）。原本线性的恐慌被计算引擎根据 JSON 规则转化为如 1.5倍 的指数级冲击，推算 `US10Y` 将被暴力推高。
+*   **第二幕 (`US10Y -> PE_DAL`)**：DAL 作为传统价值股，虽然遭遇宏观贴现率上行的打击。但由于引擎读取到其 PE 水位仅为极为便宜的 `15%`，命中 `threshold_config` 中的安全区间（语义上属于 `margin_dampener` 效应）。引擎据此将乘数 $\mu$ 自动解析为 0.25 的“抗跌海绵区”。
+*   **引擎推导结果**：尽管宏观资金面崩塌，其杀估值效应被其自身的“厚实安全垫”依据配置极大地过滤阻绝。最终 PE 枢纽受到的冲击负荷仅为 $\mathbf{-1.2}$。
 
 **最终 LLM 将引擎数学推演转化为交易建议（归因溯源与投告输出）**：
 *"【风控预警】：系统侦测到您的持仓标的【达美航空 DAL】遭受双重穿透打击。经图谱归因诊断，主要风险来自于微观层面的【杀业绩】（底层 Oil 飙升精准命中 EPS_DAL 产生 -4.8 的大幅下修冲击）；而在右侧【杀估值】层面，由于该资产当前处于极低绝对估值，触发了边缘侧 `margin_dampener` 防御机制，估值端反而构筑了护城河（仅引发 -1.2 压制）。综合判定：虽然避免了灾难性的戴维斯双杀（泡沫共振），但利润基盘确认受损。系统判定其上涨胜率下降，**凯利公式控制模块建议您将对应仓位锁损并缩减 25%**。"*
@@ -235,19 +236,20 @@ $$Impact(B) = \Delta A \times \Big( \beta \times \mu(A_{current\_state}) \times 
 ```mermaid
 sequenceDiagram
     participant LLM as Event Parser (LLM)
-    participant Graph as Ontology Graph (NetworkX/Redis)
-    participant Engine as Transmission Engine
+    participant Graph as Ontology Graph (FalkorDB)
+    participant Engine as Transmission Engine (Tracer)
     participant Portfolio as Portfolio State
     participant UI as Output / Suggestion
 
-    LLM->>Graph: 解析新闻为事件图元 (e.g. Event: Oil Supply Shock)
-    Graph-->>Engine: 提取局部受影响子图 (Oil 及其邻接节点)
-    Engine->>Engine: 计算一阶影响 (Oil Delta: +10%)
-    Engine->>Engine: 顺延边权重进行网络传导
-    Engine->>Engine: 累加二阶影响 (Airline -4%, Tech -1.5%)
-    Engine->>Portfolio: 将计算出的资产震荡预期与持仓匹配
-    Portfolio-->>Engine: 发现高仓位的 Tech 板块敞口过大
-    Engine->>UI: 动作建议: "Tech 板块减仓 15%，建立 Energy 多头对冲"
+    LLM->>Graph: 解析自然语言新闻，Grounding 到起始物理节点 (e.g. Oil: +10%)
+    Engine->>Graph: 沿着网络扩散，查询目标节点状态与边配置
+    Graph-->>Engine: 返回包含目标水位 (percentile) 与边规则 (threshold_config) 的子图
+    Engine->>Engine: 线性传导: 结合 Base Beta 一阶推进
+    Engine->>Engine: 非线性修正: 纯数据驱动，解析边 JSON 区间得出乘数 mu
+    Engine->>Engine: 累加并衰减高阶网络影响 (e.g. 枢纽 EPS -4.8)
+    Engine->>Portfolio: 将所有末级资产的衰减幅面映射到真实账户持仓
+    Portfolio-->>Engine: 计算整体资产回撤敞口
+    Engine->>UI: 触发预警并输出凯利公式调仓建议
 ```
 
 ### 4.2 大语言模型 (LLM) 的核心角色定义
@@ -258,54 +260,58 @@ sequenceDiagram
 
 1.  **输入端：事件的结构化解析 (Event Extraction & Grounding)**
     现实世界的新闻是混乱的（如：“沙特设施遇袭，产量下降”或“美联储暗示年内由于就业不佳将提前降息”）。引擎无法直接读取这些文本。
-    LLM 的任务是阅读这些新闻/研报，并强制输出符合图谱 Schema 的 JSON：
+    LLM 的任务是阅读这些新闻/研报，并强制输出符合 `tracer.py` 入参的指令：
     ```json
     {
-      "source_node": "Oil_Supply",
-      "event_type": "Shock_Decrease",
-      "estimated_initial_delta": "+8%",
-      "confidence": "High"
+      "target_ticker": "UKOIL",
+      "initial_delta_pct": "+8",
+      "current_vix_estimate": 25,
+      "event_logic": "沙特减产引发的供给侧断崖冲击"
     }
     ```
-    它负责把含糊的人类语言，翻译成图分析引擎能接收的“初始扰动参数 ($\Delta A$)”。
+    它负责把含糊的人类语言，翻译成图分析引擎能接收的“初始扰动参数 ($\Delta A$)”与全局宏观系数定调（VIX）。
 
 2.  **输出端：投顾视角的逻辑凝练 (Explainability & Advising)**
-    传导引擎计算完后，输出的只有一堆冰冷的数字（如 `DAL Impact Score: -18, Position -33%`）。
-    LLM 的第二个任务是接收这些计算结果，并结合当前的宏观语境，为交易员生成一段逻辑连贯的“诊断报告”。
-    *示例输出*：“由于本次原油减产发生在油价历史高位（激活了状态修饰器），且当前市场风险偏好脆弱（VIX=28）。风险模型侦测到您的持仓中【达美航空】暴露在严重的二阶传导链路上风险评分为-18。建议立即将其仓位缩减三分之一，并可考虑买入 $XLE (能源ETF) 进行短期对冲。”
+    传导引擎计算完后，输出的只有一堆冰冷的数字（如 `DAL Impact Score: -1.2, Position -25%`）。
+    LLM 的第二个任务是接收这些计算结果和图谱中边上带有的 `logic` 解释，并结合当前的宏观语境，为交易员生成一段逻辑连贯的“诊断报告”。
+    *示例输出*：“由于本次原油减产发生在油价历史高位（激活了 `percentile_amplifier`），且当前市场风险偏好脆弱（VIX=28）。风险模型侦测到您的持仓中【达美航空】暴露在严重的二阶传导链路上风险评分为-4.8。但其自身估值防御强劲触发了 `margin_dampener`，最终建议将其仓位缩减四分之一进行锁损防御。”
 
-> **为什么不让 LLM 直接算风险？**
-> LLM 存在幻觉，且极不擅长高阶浮点数运算和多维路径追踪。如果在提示词里让 LLM 直接想“油价对各行业有啥影响并给个减仓比例”，它很可能是瞎编的。**让 LLM 负责语义，让 NetworkX/图算法负责数学传导**，这是目前金融 AI 工程化最强壮的范式（Neuro-Symbolic AI 神经符号学）。
+> **深度思考：为什么不让 LLM 纯天然地全干？**
+> LLM 存在极高的幻觉率，且在复杂图谱的多跳高阶浮点数连乘计算上表现灾难。如果在提示词里让 LLM 直接想“油价对各行业有啥影响并给个减仓比例”，它很可能是基于陈旧记忆瞎编的。**让大语言模型负责理解语义、提取参数与解说翻译；让 FalkorDB 图数据库和 Python 算法负责严格定量的数学传导**，这是目前金融 AI 工程化最为精准的落地解法（Neuro-Symbolic AI 神经符号学架构）。
 
 ### 4.3 目录结构规划建议
 
-在现有的 `pi-mono-stack/irm/scripts/` 目录下，我们需要进行以下扩充：
+在现有的 `pi-mono-stack/irm/scripts/` 目录下，已经形成并落地了以下核心结构：
 
 ```text
 irm/scripts/
-├── entrypoint.sh             # 容器入口管理与定时任务分配
+├── entrypoint.sh             # 容器启动引导与后台生命周期维持
+├── irm.sh                    # 统一操作 CLI 入口路由 (irm tracer, irm portfolio, irm init-db)
 ├── ontology/
-│   └── tracer.py             # 核心风控图引擎：连接 FalkorDB，计算一阶/二阶衰减传导分值与资产受冲幅面
+│   ├── init_graph.py         # Schema 同步器：解析 .cypher 实体规则库并全量注入图谱
+│   └── tracer.py             # 纯血图算法核心：基于 Cypher 读图与 JSON 阈值配置驱动的非线性传导引擎
 └── analyzer/
-    └── portfolio_advisor.py  # 长线智囊核心：读取 tracer 分值，利用非对称贝叶斯凯利公式，输出仓位调整指令与 PnL 预期
+    ├── portfolio_viewer.py   # 持仓观测舱：聚合组合持仓并实时展成金融仓位表
+    └── portfolio_advisor.py  # [设计预留] 凯利公式专家组：结合推演损幅，给出锁损对冲建议
 ```
 
-### 4.4 图谱数据库与存储评估
-*   **0-1 阶段 (MVP)**: 直接使用 Python 的 **NetworkX** 库在内存中构建有向属性图（便于快速迭代传导算法，无需维护数据库状态）。
-*   **1-100 阶段**: 结合目前 Docker 架构中存在的 **FalkorDB (Redis)**，由于 FalkorDB 原生支持 Cypher 查询语言的图数据库功能，非常适合存储万级别的资产关联边，同时性能极高。
+### 4.4 图谱数据库最终落地方案：FalkorDB (RedisGraph 继任者)
+*   **弃用内存缓存方案 (NetworkX)**：由于宏观物理节点和边的属性多达数百项（涉及 `threshold_config` 等 JSON 配置），纯粹的内存运行不再具备持久化分析的价值。
+*   **原生支持与极速毫秒级检索**：系统最终全面对接了 Docker 环境下的 **FalkorDB**。得益于其对原生 Cypher 查询语言的兼容，我们能够把所有“业务规则（阈值）、网络拓扑（关系）、底层物理属性（水位分位数）”全量封存于 `SCHEMA.cypher` 内。
+*   **计算下放分离**：Python 端（如 `tracer.py`）彻底沦为了一个无主观意识的数学算盘，而 FalkorDB 将作为整个交易世界唯一、绝对的“数据与策略真理图谱 (Single Source of Truth)”。
 
 ---
 
 ### 4.5 数据获取与自动化更新机制 (Pipeline)
 
-系统中引入了非线性变量（如 $\beta$, $\mu$, $\gamma$），其数据获取机制是系统工程落地的关键：**基准系数由离线/本地流水线自动计算得出，而修饰规则（极值阈值）则融合了自定义的专家逻辑。**
+系统中引入了大量关键量化变量（如 $\beta$, $\mu$, $\gamma$），其数据生命周期是系统稳定运行的灵魂保障：**基准特征由流水线自动提取，而极值阈值规则由图谱原生配置把控。**
 
-#### 纯数据驱动层 (自动获取与计算)
-*   **Base Beta ($\beta$)**: 获取方式为100%自动化。通过定时任务（如周末运行下线的脚本 `calc_betas.py`），利用您的 TradingView 等市场数据源，拉取两类资产过去 1 至 3 年的日线历史收盘价，计算长期的皮尔逊相关系数（Pearson Correlation）或回归斜率（Regression Slope），并自动将更新值写入图谱数据库。
-*   **状态水位与恐慌指数 ($A_{state}$ 实时水位, $\gamma$ VIX)**: 每次引擎拉起风险推演运算前，实时请求一次行情接口，获取最新的资产实时价格、宏观数据和恐慌指数。系统内瞬间自动计算出指标当前所处的历史分位数（如 95% Percentile），不需要人工介入。
+#### 纯数据驱动层 (自动计算与实时映射)
+*   **Base Beta ($\beta$)**: 设计为自动化同步更新。可通过独立的脚本（如计划中的 `calc_betas.py`）对接市场行情接口，周期性拉取历史资产面板数据，利用回归斜率（Regression Slope）跑出基准 $\beta$ 后执行 Cypher `SET` 命令批量覆写至图谱底层边。
+*   **状态水位与恐慌指数 ($A_{state}$ 实时水位, $\gamma$ VIX)**: 目前阶段，作为全局变量的 VIX 及其初始冲击 Delta 均通过统一的 CLI 命令（如 `irm tracer --vix 35 --delta -1.0`）模拟注入图谱。随着系统演进，该过程将会被真实的实时 API 中间件剥离并自动化。而目标节点的历史分位数 (percentile) 则是客观物理状态，目前作为静态浮点数固化在图中（供触发极值拦截使用）。
 
-#### 专家定义与定序规则层 (半自定义)
-*   **状态修饰的极限阈值 ($\mu$)**: 触发系数放大的阈值设定是系统的灵魂。因为单纯的线性统计学无法告诉你“油价突破 100 美元会导致航司利润非线性断崖跌落”这种物理与商业常识。因此，这部分参数**必须由人工或专家自定义输入**（写死在规则库中），由熟悉宏观经济逻辑的策略师以 JSON/YAML 的形式定义（例如：“当油价的分位数 > 80% 时，设置放大倍数为 2.5”）。这类数据沉淀越多，该 IRM 系统抵抗脆弱性的能力越强。
+#### 专家定义与图谱配置层 (Rule-Engineization)
+*   **状态修饰的极限阈值 ($\mu$)**: 决定“杀估值”还是“抗跌”的命脉。单纯的线性统计学无法告诉你“油价突破 100 美元会导致航司利润非线性断崖跌落”这种物理常识。因此，这部分参数**必须由专家定义**。但与硬编码不同，在目前的 V2 架构中，策略师只需以原生 JSON 格式直接填写到 `SCHEMA.cypher` 每一条边的 `threshold_config` 属性下即可（例如：`[{"min": 0.80, "max": 1.0, "mu": 2.5}]`）。当您执行 `irm init-db` 时，所有自定义规则会随之一键入库。沉淀的 JSON 规则颗粒度越细，系统抵御非线性黑天鹅的能力就越强。
 
 ---
 
@@ -313,26 +319,100 @@ irm/scripts/
 
 可以通过编写一个 Python 字典（或 JSON Schema）来优雅地结构化这种多维度边：
 
-```python
-# edges_config.json
+```json
+// edges_config 示例 (映射为 Cypher 定义)
 {
   "source": "US10Y",
   "target": "PE_NVDA",
   "edge_attributes": {
     "base_beta": -1.8,
-    "state_modifiers": {
-      "modifier_metric": "target_percentile",  # 引擎指令：主动去读取 target(PE_NVDA) 节点的 percentile 属性
-      "state_trigger": "percentile_amplifier", # 使用通用数学放大器（极位指数放大器）
-      "thresholds": [
-        {"range": [0, 85], "multiplier": 1.0},    # 常规区间 
-        {"range": [85, 95], "multiplier": 1.5},   # 风险预警区
-        {"range": [95, 100], "multiplier": 3.0}   # 极值崩塌区
-      ]
-    },
-    "trigger_gamma": true,       # 是否受全局恐慌情绪(VIX)加持
-    "description": "Rate hike impact on overvalued AI future cash flows"
+    "modifier_metric": "target_percentile",  // 引擎指令：主动去读取 target(PE_NVDA) 节点的 percentile 属性
+    "state_trigger": "percentile_amplifier", // 保留作为语义化标签，用于 LLM 投顾解说与前端可视化染色
+    "threshold_config": [                    // 引擎实际执行的“纯数字化规则”
+      {"min": 0.95, "max": 1.0, "mu": 4.0},  // 极值崩塌区 (>=95%)：触发 4倍 放大
+      {"min": 0.85, "max": 0.95, "mu": 2.0}, // 风险预警区 (85%~95%)：触发 2倍 放大
+      {"min": 0.0,  "max": 0.85, "mu": 1.0}  // 常规区间 (<85%)：常态线性传导
+    ],
+    "gamma_sensitive": true,                 // 是否受全局恐慌情绪(VIX)加持
+    "logic": "极高贴现率重创超高估值AI远期现金流"
   }
 }
 ```
 
 这种设计的精妙之处在于：**日常盘整期（$\mu=1, \gamma=1$）它退化为普通的线性相关性模型；而一遇极值环境，非线性乘数被激活，它就摇身一变成了一套“黑天鹅防御雷达”。**
+
+---
+
+## 附录：核心实体节点 (Node Types) 与物理属性定义库
+
+在 IRM 本体论中，节点(Node) 严格遵守“只保留客观事实”的解耦原则。所有的业务敏感度、传导方向和放大乘数一律挂载在边(Edge)上。
+
+### 1. 金融与宏观资产类 (`Asset` 及其子标签)
+可交易或可监测的具体标的，用于唯一标识物种其在宏观结构中的角色。
+*   `ticker` *(String, 必填)*: 唯一标识代码（如 'US10Y', 'AAPL', 'VIX'）。
+*   `name` *(String, 必填)*: 资产的中英文全称或简称。
+*   `region` *(String, 可选)*: 所属地域（如 'US', 'JP'），主要用于宏观利率。
+*   `role` *(String, 可选)*: 宏观角色定义（如 'Global Pricing Anchor'）。
+*   `type` *(String, 可选)*: 资产具体形态（特用于汇率，如 'Fiat Index', 'FX Pair'）。
+*   `market` *(String, 可选)*: 所属金融市场板块（特用于波动率，如 'Equity', 'Fixed Income'）。
+*   `sector` *(String, 可选)*: 资源/物理行业分类（特用于大宗商品，如 'Energy', 'Precious Metals'）。
+*   `style` *(String, 可选)*: 投资组合风格归类（特用于 ETF，如 'Growth', 'Defensive'）。
+*   `supply_type` *(String, 可选)*: 供给模型属性（特用于 Crypto，如 BTC 的 'Fixed'）。
+
+### 2. 微观公司实体 (`Asset:Stock`)
+代表具体的上市公司标的，携带有用于评估实体冲击的财务拆解数据。
+*   继承上述 `Asset` 的核心属性 (`ticker`, `name` 等)。
+*   `foreign_revenue_pct` *(Float, 可选)*: 财报披露的海外营收占比（如 `0.58`）。作为客观物理指标，它将在引擎推演强势美元 (DXY) 冲击时，决定该公司承受汇兑损益折损的底座基数。
+
+### 3. 主题与行业概念聚合网 (`Sector`, `Theme`)
+用于抽象的网状层级，归拢同质化风险或市场共振叙事。
+*   `name` *(String, 必填)*: 标准英文界定名（如 'Information Technology', 'AI Infrastructure'）。
+*   `name_cn` *(String, 可选)*: 辅助中文命名定性。
+
+### 4. 账户维度的终端节点 (`Portfolio`)
+IRM 系统的投顾和凯利公式重分配目标。
+*   `owner` *(String, 必填)*: 账户持有人识别（如 'Admin'）。
+*   `name` *(String, 必填)*: 组合定位名。
+*   `strategy` *(String, 可选)*: 交易主旨大纲（如 'Macro-Thematic Allocation'）。
+*   `currency` *(String, 必填)*: 计价与结算基础币种（如 'USD'）。
+*   `total_value` *(Float, 必填)*: 组合当前整体资产净值规模（如 `1000000`）。
+
+### 5. 定价引擎极值监控节点 (`Hub` - `Valuation` / `Earnings`) ★ 核心
+作为金融泡沫与业绩恐慌的吸收防波堤。
+*   `target` *(String, 必填)*: 指向其映射的底层标的 ticker（如 'NVDA'）。
+*   `name` *(String, 必填)*: 指标特征维度定义（如 'NVDA 估值倍数 (PE)'）。
+*   `percentile` *(Float, 可选)*: **当前历史分位点（如 `0.99`）**。这是全系统唯一参与由 `_calculate_mu` 触发非线性级联暴涨/崩塌计算的核心客观动态数据。
+
+---
+
+## 附录：核心传导边 (Edge Types) 与引擎属性库
+
+边 (Edge) 承载了系统所有的“业务逻辑”、“数学敏感度”以及“状态转换阈值”。节点间的互相关联共同织成了风险传导演算网络。
+
+### 1. 边的语义类型 (Edge Relationships)
+*   `[:DRIVES]` **(宏观驱动)**: 描绘金融市场第一推动力（如油价推高通胀预期）或主题叙事爆发（如 AI 概念拉爆龙头股价）。
+*   `[:SPILLS_TO]` **(风险溢出)**: 描绘因资金链脆弱导致跨市场恐慌蔓延（如债市利率剧震引爆股市恐慌）。
+*   `[:PRICES]` **(定价压制)**: 核心算力通道。用于宏观因子或风险因子对资产或定价枢纽进行定点打击（常带有复杂的极值阈值设定）。
+*   `[:COMPOSES]` / `[:TRACKS]` / `[:BELONGS_TO]` / `[:HEAVILY_EXPOSED_TO]` **(结构归属)**: 定义资产间的物理从属特征（如个股占行业圈定的权重，指数占成分股的权重）。
+*   `[:CORRELATES_WITH]` **(相关性补充)**: 捕捉无法用因单项归因解释，但具有统计学同步特征的市场行为。
+*   `[:DETERMINES]` **(价值决定)**: 限定于 Hub (PE/EPS 枢纽) 到底层资产方向。承载 P = PE * EPS 的转化公式。
+*   `[:HOLDS]` **(组合触达)**: 承载终端私人账户 (Portfolio) 对资产的真实持仓明细。
+
+### 2. 传导计算核心属性 (Engine Execution Properties)
+这些属性直接决定引擎 `tracer.py` 如何利用距离衰减公式计算最终冲击。
+
+*   `base_beta` *(Float)*: **基准线性敏感度**。表示常态盘整期下，源头节点每变动 1%，目标节点理论上的变动幅面（如 `-1.8`，代表反向放大）。
+*   `gamma_sensitive` *(Boolean)*: **恐慌共振开关**。如果为 `true`，代表此路径在 VIX 飙升等全局恐慌时期极容易发生踩踏出逃，引擎将叠加全局 Gamma 加速器。
+*   `threshold_config` *(String/JSON Array)*: **非线性阶跃/阻断配置**。引擎计算的核心数据驱动层。形如 `[{"min": 0.95, "max": 1.0, "mu": 4.0}, ...]`，引擎会扫描目标节点的当前客观水位并赋予暴风乘数 (mu) 或过滤乘数。
+*   `logic` / `description` *(String)*: **系统推演解说词**。计算引擎不读该字段，它的作用是作为 Prompt 提供给末端投顾 LLM 提取以生成通顺的人类研报（如：*"强势美元抽血加密市场流动性"*）。
+*   `modifier_metric` *(String)*: **[已剥离至架构注释]** (如 'target_percentile')。用以说明上述 `threshold_config` 所对准的目标节点探测字段。
+*   `state_trigger` *(String)*: **[已剥离至架构注释]** (如 'percentile_amplifier', 'margin_dampener')。用作可视化系统的渲染标签指令。
+
+### 3. 静态权重与持仓属性 (Static & Holding Properties)
+主要出现在归属、包含或账户边缘。
+
+*   `composition_weight` / `sector_weight` *(Float)*: 客观成分占比（如科技股占纳斯达克100权重的 `0.58`）。
+*   `weight_pct` *(Float)*: 当前该资产占 Portfolio 的持仓配额百分比（如 `0.25` 代表 25% 仓位）。
+*   `shares` *(Float)*: 持有的具体份额数。
+*   `avg_cost` *(Float)*: 用户交易建仓的基础成本。
+*   `formula` *(String)*: 转化公式口径释义（如 `P=EPS*PE`）。

@@ -10,9 +10,10 @@ This skill leverages a **Neuro-Symbolic** approach to financial risk: using Know
 ## Core Capabilities
 
 - **Ontological Path Tracing**: Trace how macro shocks (Interest Rates, Oil, Volatility) ripple through sectors and fundamental hubs (PE/EPS) to impact specific assets.
-- **Non-Linear Amplification**: Calculate extreme scenario impacts using mathematical operators like `percentile_amplifier` and `margin_dampener`.
-- **Kelly Portfolio Optimization**: Get position sizing advice based on Bayesian win-rate adjustments derived from real-time graph impacts.
-- **Schema Management**: Initialize or evolve the financial ontology directly from the project workspace.
+- **Non-Linear State Modifiers**: Calculate extreme scenario impacts using JSON-driven `threshold_config` for amplifiers and dampeners.
+- **Portfolio & Node Exploration**: Explore graph entities and audit real-time portfolio allocation status directly from the CLI.
+- **Kelly Portfolio Optimization**: Get position sizing advice based on Bayesian win-rate adjustments derived from graph-traced impact scores.
+- **Schema Lifecycle**: Initialize or evolve the financial ontology and its non-linear rules directly from the project workspace.
 
 ## Usage
 
@@ -28,21 +29,35 @@ docker exec irm irm init-db
 Simulate a shock to a macro node and see the ripple effect on your portfolio:
 ```bash
 # Example: US 10-Year Yield rises by 5% (relative) with VIX at 35
-docker exec irm irm tracer --ticker US10Y --delta 5 --vix 35
+docker exec irm irm tracer --ticker "AI Application" --delta -2.0 --vix 35 --owner Admin
 ```
 
-### 3. Get Portfolio Advice
+### 3. Explore Graph Entities
+List all entities in the graph (excluding portfolios) to check status or percentiles:
+```bash
+docker exec irm irm nodes
+```
+
+### 4. Direct Portfolio Audit
+List the current asset allocation and cost basis for a specific owner:
+```bash
+docker exec irm irm portfolio --owner Admin
+```
+
+### 5. Get Portfolio Advice
 Input impact scores and current weights to get Kelly-based trade suggestions:
 ```bash
-# Example: 0.5-Kelly advice for a portfolio
+# Example: 0.5-Kelly advice based on tracer outputs
 docker exec irm irm advisor --impacts '{"QQQM": -61.38, "NVDA": -81.66}' --weights '{"QQQM": 0.35, "NVDA": 0.25}' --fraction 0.5
 ```
 
 ## Directory Structure (Inside Container)
 
-- `/app/scripts/ontology/tracer.py`: The graph traversal and impact engine.
-- `/app/scripts/analyzer/portfolio_advisor.py`: The Kelly-criterion decision module.
-- `/home/pi-mono/.pi/agent/workspace/.irm/`: Persistent workspace for schemas and logs.
+- `/app/scripts/ontology/tracer.py`: The graph traversal and impact engine (JSON Rule parsing).
+- `/app/scripts/analyzer/portfolio_viewer.py`: Portfolio auditing and asset allocation viewer.
+- `/app/scripts/analyzer/node_viewer.py`: Graph entity explorer.
+- `/app/scripts/analyzer/portfolio_advisor.py`: Kelly-criterion decision module.
+- `/home/pi-mono/.pi/agent/workspace/.irm/`: Persistent workspace for `SCHEMA.cypher`.
 
 ## Risk Management Principles
 
