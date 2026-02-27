@@ -186,5 +186,20 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  irm:
+    build:
+      context: irm
+      dockerfile: Dockerfile
+      network: host
+    container_name: irm
+    environment:
+      - REDIS_URL=redis://127.0.0.1:6379
+    volumes:
+      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   redis_data:
