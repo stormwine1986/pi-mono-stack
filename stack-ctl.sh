@@ -26,6 +26,10 @@ load_secrets() {
 # ---------- commands ----------
 cmd_up() {
   load_secrets
+  echo "📂 Ensuring .pi/agent directories exist …"
+  mkdir -p "${SCRIPT_DIR}/.pi/agent/sessions"
+  mkdir -p "${SCRIPT_DIR}/.pi/agent/workspace"
+
   echo "📂 Preparing .pi directory permissions …"
   if [ -d "${SCRIPT_DIR}/.pi" ]; then
     sudo chown -R 1000:1000 "${SCRIPT_DIR}/.pi"
