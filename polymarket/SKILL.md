@@ -1,15 +1,14 @@
 ---
 name: "polymarket"
-description: "Access Polymarket Gamma API to query prediction markets, search by keyword, and get detailed market metadata and prices."
+description: "Access Polymarket Gamma API to search prediction markets by keyword and get detailed market metadata."
 ---
 
 # Polymarket Skill
 
-This skill provides access to the Polymarket Gamma API, allowing agents to query markets, search for specific prediction markets, and get detailed information about them.
+This skill provides access to the Polymarket Gamma API, allowing agents to search for specific prediction markets and get detailed information about them.
 
 ## Capabilities
 
-- **List Markets**: Browse the most popular active markets.
 - **Search Markets**: Find specific markets by keyword.
 - **Get Market**: Retrieve full metadata for a single market by ID.
 
@@ -19,16 +18,11 @@ The tool MUST be executed within the `polymarket` container using `docker exec`:
 
 ```bash
 docker exec polymarket gamma_tool <action> [options]
-# OR if calling via python directly
-docker exec polymarket python3 /app/scripts/gamma_tool.py <action> [options]
 ```
 
 ### Common Commands
 
 ```bash
-# List top 10 active markets by volume
-docker exec polymarket gamma_tool list --limit 10
-
 # Search for "Bitcoin" markets
 docker exec polymarket gamma_tool search "Bitcoin" --limit 5
 
@@ -38,13 +32,15 @@ docker exec polymarket gamma_tool get 517310
 
 ### Available Options
 
-Only the following option is available for `list` and `search` commands:
+For the `search` command:
 
 | Option | Description | Default |
 | :--- | :--- | :--- |
 | `--limit <num>` | Maximum number of markets to return. | 10 |
 
-**Note**: To keep results clean and highly relevant, `list` and `search` commands are hardcoded to **only** return active, unclosed markets. Results are always sorted by **trading volume in descending order**, and only return a default set of essential fields.
+**Note**: To keep results clean and highly relevant, the `search` command is hardcoded to **only** return active, unclosed markets.
+- `search` is sorted by **API relevance** based on the keyword.
+- All commands support `-h` or `--help` for detailed usage instructions.
 
 ## Examples
 **Find top "Trump" markets:**
@@ -52,13 +48,8 @@ Only the following option is available for `list` and `search` commands:
 docker exec polymarket gamma_tool search "Trump" --limit 5
 ```
 
-**List the top 20 most traded active markets:**
-```bash
-docker exec polymarket gamma_tool list --limit 20
-```
-
 ## Response Fields
-By default, `list` and `search` return a curated set of common fields. The `get` command returns all available metadata for a specific market.
+By default, `search` returns a curated set of common fields. The `get` command returns all available metadata for a specific market.
 
 | Field | Description |
 | :--- | :--- |
