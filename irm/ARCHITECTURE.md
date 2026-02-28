@@ -385,8 +385,57 @@ graph TD
     3.  **水位映射**：从 Redis 获取该 Ticker 的 `[min, max]` 区间，通过线性插值计算当前水位。
     4.  **写回图谱**：更新 `Hub` 节点的 `percentile` 属性。
 *   **管理层 (IRM CLI)**：
-    *   `irm pe-bands ls`：查看所有定义。
     *   `irm pe-bands update <ticker> <min> <max>`：新增或修改配置。
+
+---
+
+### 4.8 宏观环境分位点自动化配置与更新管道 (Macro Percentile Pipeline)
+
+该管道旨在提取“客观的宏观水位（例如美元处于历史极高位还是低位）”，并将其作为 `percentile` 属性硬编码写入本体图谱的源头节点（Root Nodes），以驱动 `tracer` 引擎触发极值非线性核爆（或抗跌阻隔）机制。
+
+#### 1. 架构概览
+
+如同 PE 估值管道，宏观状态同步管道也遵循“配置（由人类/终端设定）与执行（由算力完成）彻底代码级分离”的理念。它同样依托基于 Redis 的高速微服务缓存机制运行：
+
+```mermaid
+graph TD
+    subgraph "External Providers"
+        YFinance[Yahoo Finance]
+        FRED[Federal Reserve Economic Data]
+    end
+
+    subgraph "IRM Container"
+        CLI[IRM CLI / irm.sh]
+        ConfigMgr[config_manager.py]
+        MacroUpdater[update_macro_states.py]
+    end
+
+    subgraph "Infrastructures"
+        Redis[(Redis - Config Store)]
+        FalkorDB[(FalkorDB - Ontology Chart)]
+    end
+
+    CLI -->|macro-assets ls/update| ConfigMgr
+    ConfigMgr -->|HSET/HGETALL| Redis
+    MacroUpdater -->|Read Config| Redis
+    MacroUpdater -->|Fetch 3Y TimeSeries| YFinance
+    MacroUpdater -->|Fetch 3Y TimeSeries| FRED
+    MacroUpdater -->|Calculate rank(pct=True)| MacroUpdater
+    MacroUpdater -->|Update Source Nodes| FalkorDB
+```
+
+#### 2. 核心组件说明
+
+*   **配置层 (Redis `irm:config:macro_assets`)**：
+    存储宏观资产的拉取凭证信息（如 `{"US10Y": {"symbol": "^TNX", "provider": "yfinance"}, "JP10Y": {"symbol": "IRLTLT01JPM156N", "provider": "fred"}}`）。支持在运行时通过 API 热拔插新的宏观风向标。
+*   **执行层 (update_macro_states.py)**：
+    1.  **扫描图谱与配置**：交叉比对 Redis 中的宏观配置与本体图中实际存在的节点。
+    2.  **智能提取数据**：根据 `provider` 的要求（透传 `FRED_API_KEY` 等环境变量），透过 OpenBB 向不同的数据源拉取过去 3 年历史日线行情。
+    3.  **计算极值水位**：针对返回的泛型 DataFrame 进行探测（动态探测 `close` 或 `value` 列），并应用 Pandas 的 `rank(pct=True)` 函数提取最后一天的客观所处分位数（百分比等级）。
+    4.  **写回图谱**：更新所有关联宏观变量（`InterestRate`, `Currency`, `Volatility` 等类别）节点本身的 `percentile` 属性。
+*   **管理层 (IRM CLI)**：
+    *   `irm macro-assets ls`：查看当前纳管的宏观标的、Symbol 映射对照。
+    *   `irm macro-assets update <ticker> <symbol> <provider>`：动态修改宏观节点对应的现实金融代码或切换数据供应商。
 
 ---
 
