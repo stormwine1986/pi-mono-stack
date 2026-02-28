@@ -58,7 +58,8 @@ class IRMTracer:
         cypher = (
             f"MATCH (n)-[r]->(m) WHERE COALESCE(n.ticker, n.name) = '{ticker}' "
             f"RETURN COALESCE(m.ticker, m.name), type(r), r.base_beta, r.gamma_sensitive, "
-            f"r.state_trigger, labels(m)[0], m.percentile, r.modifier_metric, r.threshold_config, n.percentile"
+            f"r.state_trigger, labels(m)[0], m.percentile, r.modifier_metric, r.threshold_config, n.percentile, "
+            f"m.pe_percentile, m.erp_percentile"
         )
         result = self._query_falkor(cypher)
         
@@ -78,7 +79,9 @@ class IRMTracer:
                     "target_percentile": float(row[6]) if row[6] is not None else None,
                     "modifier_metric": row[7],
                     "threshold_config": row[8] if len(row) > 8 else None,
-                    "source_percentile": float(row[9]) if (len(row) > 9 and row[9] is not None) else None
+                    "source_percentile": float(row[9]) if (len(row) > 9 and row[9] is not None) else None,
+                    "target_pe_percentile": float(row[10]) if (len(row) > 10 and row[10] is not None) else None,
+                    "target_erp_percentile": float(row[11]) if (len(row) > 11 and row[11] is not None) else None
                 })
             except (ValueError, IndexError, TypeError):
                 continue
@@ -148,8 +151,14 @@ class IRMTracer:
                         gamma = 1.5 if current_vix <= 45 else 2.5
                 
                 # 3. DYNAMIC State Modifier (mu) - JSON Config Driven!
-                if n['modifier_metric'] == 'source_percentile':
+                # Routing logic for different modifier metrics
+                metric = n['modifier_metric']
+                if metric == 'source_percentile':
                     reference_percentile = n['source_percentile']
+                elif metric == 'target_erp_percentile':
+                    reference_percentile = n['target_erp_percentile']
+                elif metric == 'target_pe_percentile':
+                    reference_percentile = n['target_pe_percentile']
                 else:
                     reference_percentile = n['target_percentile']
                 
