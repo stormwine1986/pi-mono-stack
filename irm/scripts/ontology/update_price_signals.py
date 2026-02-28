@@ -12,7 +12,7 @@ import redis
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class MacroStateUpdater:
+class PriceSignalUpdater:
     def __init__(self, graph_name="Graph-001"):
         self.graph_name = graph_name
         
@@ -39,8 +39,8 @@ class MacroStateUpdater:
             self.graph = None
             self.redis_client = None
 
-    def get_macro_config(self):
-        """从 Redis 获取宏观资产配置"""
+    def get_price_signal_config(self):
+        """从 Redis 获取资产价格源配置"""
         if not self.redis_client:
             return {}
         
@@ -51,7 +51,7 @@ class MacroStateUpdater:
                 config[ticker] = json.loads(data_str)
             return config
         except Exception as e:
-            logger.error(f"Failed to load macro config from Redis: {e}")
+            logger.error(f"Failed to load price signal config from Redis: {e}")
             return {}
 
     def query_falkor(self, cypher):
@@ -63,8 +63,8 @@ class MacroStateUpdater:
             logger.error(f"Cypher Query Error: {e}")
             return None
 
-    def get_macro_assets(self, tickers):
-        """获取图中的宏观资产节点"""
+    def get_price_signal_assets(self, tickers):
+        """获取图中的资产节点"""
         cypher = f"MATCH (a:Asset) WHERE a.ticker IN {json.dumps(tickers)} RETURN a.ticker"
         result = self.query_falkor(cypher)
         assets = []
@@ -74,8 +74,8 @@ class MacroStateUpdater:
             assets.append(row[0])
         return assets
 
-    def calculate_macro_percentile(self, asset_ticker, config):
-        """计算宏观资产的历史分位点及当前值"""
+    def calculate_price_percentile(self, asset_ticker, config):
+        """计算资产的历史价格分位点及当前值"""
         asset_config = config.get(asset_ticker)
         if not asset_config:
             logger.warning(f"No config found for {asset_ticker}")
@@ -134,22 +134,22 @@ class MacroStateUpdater:
             return
         
         # 1. 从 Redis 加载配置
-        config = self.get_macro_config()
+        config = self.get_price_signal_config()
         if not config:
-            logger.warning("No macro assets configured in Redis. Skipping update.")
+            logger.warning("No price signals configured in Redis. Skipping update.")
             return
 
         # 2. 交叉验证图中存在的资产
-        macro_tickers = self.get_macro_assets(list(config.keys()))
-        logger.info(f"Found macro assets in DB to update: {macro_tickers}")
+        tickers = self.get_price_signal_assets(list(config.keys()))
+        logger.info(f"Found assets in DB to update: {tickers}")
         
         # 3. 逐个更新
-        for ticker in macro_tickers:
-            percentile, value = self.calculate_macro_percentile(ticker, config)
+        for ticker in tickers:
+            percentile, value = self.calculate_price_percentile(ticker, config)
             if percentile is not None and value is not None:
                 self.update_node_state(ticker, percentile, value)
                 logger.info(f"Successfully updated {ticker} (p={percentile:.4f}, v={value:.4f}) in DB.")
 
 if __name__ == "__main__":
-    updater = MacroStateUpdater()
+    updater = PriceSignalUpdater()
     updater.run()

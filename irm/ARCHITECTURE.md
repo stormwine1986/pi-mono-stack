@@ -259,36 +259,24 @@ sequenceDiagram
 ```text
 irm/scripts/
 ├── entrypoint.sh             # 容器启动引导与后台生命周期维持
-├── irm.sh                    # 统一操作 CLI 入口路由 (irm tracer, irm portfolio, irm init-db)
+├── irm.sh                    # 统一操作 CLI 入口路由 (irm tracer, irm advisor, irm portfolio, irm init-db)
 ├── ontology/
-│   ├── init_graph.py         # Schema 同步器：解析 .cypher 实体规则库并全量注入图谱
-│   └── tracer.py             # 纯血图算法核心：基于 Cypher 读图与 JSON 阈值配置驱动的非线性传导引擎
+│   ├── sync_schema.py        # Schema 同步器：解析 .cypher 实体规则库并全量注入图谱
+│   ├── tracer.py             # 纯血图算法核心：基于 Cypher 读图与 JSON 阈值配置驱动的非线性传导引擎
+│   ├── calc_betas.py         # 自动化 Beta 提取：基于历史数据回归分析资产间的线性敏感度
+│   ├── update_price_signals.py # 全局价格信号同步：拉取资产/指标价格并更新其在图中的分位数水位
+│   ├── update_percentiles.py  # 估值分位更新：自动化拉取 PE 数据并计算拥挤度分位
+│   └── update_earnings.py    # 盈利预期更新：同步底层标的的盈利预测与增速分位
 └── analyzer/
     ├── portfolio_viewer.py   # 持仓观测舱：聚合组合持仓并实时展成金融仓位表
-    └── portfolio_advisor.py  # [设计预留] 凯利公式专家组：结合推演损幅，给出锁损对冲建议
+    ├── portfolio_advisor.py  # 凯利公式专家组：结合推演损幅与 Bayesian 胜率修正，给出仓位建议
+    ├── config_manager.py     # 分布式配置管理：统一维护 Redis 中的经验区间(Bands)与数据源映射
+    └── node_viewer.py        # 节点探针：快速查询特定 Ticker 在图中的物理属性与分位点
 ```
 
-### 4.4 图谱数据库最终落地方案：FalkorDB (RedisGraph 继任者)
-*   **弃用内存缓存方案 (NetworkX)**：由于宏观物理节点和边的属性多达数百项（涉及 `threshold_config` 等 JSON 配置），纯粹的内存运行不再具备持久化分析的价值。
-*   **原生支持与极速毫秒级检索**：系统最终全面对接了 Docker 环境下的 **FalkorDB**。得益于其对原生 Cypher 查询语言的兼容，我们能够把所有“业务规则（阈值）、网络拓扑（关系）、底层物理属性（水位分位数）”全量封存于 `SCHEMA.cypher` 内。
-*   **计算下放分离**：Python 端（如 `tracer.py`）彻底沦为了一个无主观意识的数学算盘，而 FalkorDB 将作为整个交易世界唯一、绝对的“数据与策略真理图谱 (Single Source of Truth)”。
-
 ---
 
-### 4.5 数据获取与自动化更新机制 (Pipeline)
-
-系统中引入了大量关键量化变量（如 $\beta$, $\mu$, $\gamma$），其数据生命周期是系统稳定运行的灵魂保障：**基准特征由流水线自动提取，而极值阈值规则由图谱原生配置把控。**
-
-#### 纯数据驱动层 (自动计算与实时映射)
-*   **Base Beta ($\beta$)**: 设计为自动化同步更新。可通过独立的脚本（如计划中的 `calc_betas.py`）对接市场行情接口，周期性拉取历史资产面板数据，利用回归斜率（Regression Slope）跑出基准 $\beta$ 后执行 Cypher `SET` 命令批量覆写至图谱底层边。
-*   **状态水位与恐慌指数 ($A_{state}$ 实时水位, $\gamma$ VIX)**: 目前阶段，作为全局变量的 VIX 及其初始冲击 Delta 均通过统一的 CLI 命令（如 `irm tracer --vix 35 --delta -1.0`）模拟注入图谱。随着系统演进，该过程将会被真实的实时 API 中间件剥离并自动化。而目标节点的历史分位数 (percentile) 则是客观物理状态，目前作为静态浮点数固化在图中（供触发极值拦截使用）。
-
-#### 专家定义与图谱配置层 (Rule-Engineization)
-*   **状态修饰的极限阈值 ($\mu$)**: 决定“杀估值”还是“抗跌”的命脉。单纯的线性统计学无法告诉你“油价突破 100 美元会导致航司利润非线性断崖跌落”这种物理常识。因此，这部分参数**必须由专家定义**。但与硬编码不同，在目前的 V2 架构中，策略师只需以原生 JSON 格式直接填写到 `SCHEMA.cypher` 每一条边的 `threshold_config` 属性下即可（例如：`[{"min": 0.80, "max": 1.0, "mu": 2.5}]`）。当您执行 `irm init-db` 时，所有自定义规则会随之一键入库。沉淀的 JSON 规则颗粒度越细，系统抵御非线性黑天鹅的能力就越强。
-
----
-
-### 4.6 核心边引擎机制 (JSON Payload Schema)
+### 4.4 核心边引擎机制 (JSON Payload Schema)
 
 可以通过编写一个 Python 字典（或 JSON Schema）来优雅地结构化这种多维度边：
 
@@ -316,7 +304,7 @@ irm/scripts/
 
 ---
 
-### 4.7 P/E 百分位自动化更新管道 (PE Percentile Pipeline)
+### 4.5 P/E 百分位自动化更新管道 (PE Percentile Pipeline)
 
 该管道旨在自动执行从外部金融市场（OpenBB）拉取实时市盈率（P/E），并根据配置的经验带（Bands）计算资产估位（Percentile），最后将计算结果持久化到 FalkorDB 本体图谱中，以驱动风控引擎的动态传导。
 
@@ -368,7 +356,7 @@ graph TD
 
 ---
 
-### 4.8 全局数据源自动化配置与同步管道 (Data Sources Pipeline)
+### 4.6 全局价格信号自动化配置与同步管道 (Price Signals Pipeline)
 
 该管道旨在提取“客观的市场状态（例如美元处于历史极高位、标普100的实时价格等）”，并将其作为 `percentile` 属性或其他动态指标更新至本体图谱。
 
@@ -386,7 +374,7 @@ graph TD
     subgraph "IRM Container"
         CLI[IRM CLI / irm.sh]
         ConfigMgr[config_manager.py]
-        MacroUpdater[update_macro_states.py]
+        MacroUpdater[update_price_signals.py]
     end
 
     subgraph "Infrastructures"
@@ -407,7 +395,7 @@ graph TD
 
 *   **配置层 (Redis `irm:config:sources`)**：
     存储所有纳管资产的拉取凭证信息（如 `{"US10Y": {"symbol": "^TNX", "provider": "yfinance"}}`）。
-*   **执行层 (update_macro_states.py)**：
+*   **执行层 (update_price_signals.py)**：
     1.  **拉取历史序列**：通过 OpenBB 向供应商拉取 3 年历史数据。
     2.  **计算水位 (Percentile)**：应用 `rank(pct=True)` 提取分位数。
     3.  **提取物理值 (Value)**：保留资产的最新报价数据（如 VIX 报价 15.3 或 BTC 价格）。
@@ -418,7 +406,7 @@ graph TD
 
 ---
 
-### 4.9 自动化 Beta 提取与回归演进管道 (Beta Calculation Pipeline)
+### 4.7 自动化 Beta 提取与回归演进管道 (Beta Calculation Pipeline)
 
 该管道是系统“自适应能力”的核心，负责定期通过真实市场交易数据提取资产间的线性敏感度（$\beta$）。
 

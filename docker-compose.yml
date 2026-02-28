@@ -195,6 +195,7 @@ services:
     environment:
       - REDIS_URL=redis://127.0.0.1:6379
       - FRED_API_KEY
+      - DKRON_URL=http://127.0.0.1:18047/v1
     volumes:
       - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
     labels:
