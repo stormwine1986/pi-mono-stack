@@ -61,6 +61,8 @@ def sync_schema(schema_path, graph_name="Graph-001"):
     print("[+] Schema sync complete.")
 
 if __name__ == "__main__":
-    # Default path in container
-    SCHEMA_FILE = "/home/pi-mono/.pi/agent/workspace/.irm/SCHEMA.cypher"
-    sync_schema(SCHEMA_FILE)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema", default="/home/pi-mono/.pi/agent/workspace/.irm/SCHEMA.cypher")
+    args = parser.parse_args()
+    sync_schema(args.schema)

@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git curl redis-tools && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies for risk management
 RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
