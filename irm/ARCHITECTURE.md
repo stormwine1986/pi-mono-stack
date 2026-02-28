@@ -326,7 +326,7 @@ irm/scripts/
   "target": "PE_NVDA",
   "edge_attributes": {
     "base_beta": -1.8,
-    "modifier_metric": "target_percentile",  // 引擎指令：主动去读取 target(PE_NVDA) 节点的 percentile 属性
+    "modifier_metric": "target_percentile",  // 引擎指令：主动去读取 target(PE_NVDA) 节点的 percentile 属性 (或填 source_percentile 读起源节点水位)
     "state_trigger": "percentile_amplifier", // 保留作为语义化标签，用于 LLM 投顾解说与前端可视化染色
     "threshold_config": [                    // 引擎实际执行的“纯数字化规则”
       {"min": 0.95, "max": 1.0, "mu": 4.0},  // 极值崩塌区 (>=95%)：触发 4倍 放大

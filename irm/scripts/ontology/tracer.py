@@ -58,7 +58,7 @@ class IRMTracer:
         cypher = (
             f"MATCH (n)-[r]->(m) WHERE COALESCE(n.ticker, n.name) = '{ticker}' "
             f"RETURN COALESCE(m.ticker, m.name), type(r), r.base_beta, r.gamma_sensitive, "
-            f"r.state_trigger, labels(m)[0], m.percentile, r.modifier_metric, r.threshold_config"
+            f"r.state_trigger, labels(m)[0], m.percentile, r.modifier_metric, r.threshold_config, n.percentile"
         )
         result = self._query_falkor(cypher)
         
@@ -77,7 +77,8 @@ class IRMTracer:
                     "label": row[5],
                     "target_percentile": float(row[6]) if row[6] is not None else None,
                     "modifier_metric": row[7],
-                    "threshold_config": row[8] if len(row) > 8 else None
+                    "threshold_config": row[8] if len(row) > 8 else None,
+                    "source_percentile": float(row[9]) if (len(row) > 9 and row[9] is not None) else None
                 })
             except (ValueError, IndexError, TypeError):
                 continue
@@ -133,7 +134,12 @@ class IRMTracer:
                     gamma = 1.5 if current_vix <= 45 else 2.5
                 
                 # 3. DYNAMIC State Modifier (mu) - JSON Config Driven!
-                mu = self._calculate_mu(n['target_percentile'], n.get('threshold_config'))
+                if n['modifier_metric'] == 'source_percentile':
+                    reference_percentile = n['source_percentile']
+                else:
+                    reference_percentile = n['target_percentile']
+                
+                mu = self._calculate_mu(reference_percentile, n.get('threshold_config'))
                 
                 # 4. Distance Decay
                 d_factor = self.decay_factor ** depth

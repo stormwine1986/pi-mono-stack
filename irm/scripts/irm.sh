@@ -25,6 +25,9 @@ case "$COMMAND" in
     pe-bands)
         python3 /app/scripts/analyzer/config_manager.py pe-bands "$@"
         ;;
+    macro-assets)
+        python3 /app/scripts/analyzer/config_manager.py macro-assets "$@"
+        ;;
     help|*)
         echo "IRM (Investment Risk Management) CLI"
         echo "Usage: irm <command> [options]"
@@ -35,7 +38,8 @@ case "$COMMAND" in
         echo "  portfolio - List asset allocation status for a specified owner"
         echo "  nodes     - List all entities in the graph (excluding portfolios)"
         echo "  init-db   - Sync/Initialize graph schema from SCHEMA.cypher"
-        echo "  pe-bands  - Manage PE bands configuration (ls)"
+        echo "  pe-bands  - Manage PE bands configuration (ls, update)"
+        echo "  macro-assets - Manage macro data source configuration (ls, update)"
         echo ""
         echo "Use 'irm <command> --help' for more information on a specific command."
         ;;
