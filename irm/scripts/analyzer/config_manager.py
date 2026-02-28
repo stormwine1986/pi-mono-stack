@@ -41,12 +41,12 @@ def update_pe_band(ticker, min_pe, max_pe):
     r.hset("irm:config:pe_bands", ticker, json.dumps(data))
     print(f"Successfully updated PE band for {ticker}: [{min_pe}, {max_pe}]")
 
-def list_macro_assets():
+def list_sources():
     r = get_redis_client()
-    assets = r.hgetall("irm:config:macro_assets")
+    assets = r.hgetall("irm:config:sources")
     
     if not assets:
-        print("No macro assets configured in Redis.")
+        print("No data sources configured in Redis.")
         return
 
     print(f"{'Ticker':<10} | {'Symbol':<15} | {'Provider':<10}")
@@ -60,14 +60,14 @@ def list_macro_assets():
         except Exception:
             print(f"{ticker:<10} | Error parsing data: {data_str}")
 
-def update_macro_asset(ticker, symbol, provider):
+def update_source(ticker, symbol, provider):
     r = get_redis_client()
     data = {
         "symbol": symbol,
         "provider": provider
     }
-    r.hset("irm:config:macro_assets", ticker, json.dumps(data))
-    print(f"Successfully updated macro asset {ticker}: {symbol} via {provider}")
+    r.hset("irm:config:sources", ticker, json.dumps(data))
+    print(f"Successfully updated source {ticker}: {symbol} via {provider}")
 
 def main():
     parser = argparse.ArgumentParser(description="IRM Configuration Manager")
@@ -82,14 +82,14 @@ def main():
     update_pe_parser.add_argument("min", type=float, help="Minimum PE value")
     update_pe_parser.add_argument("max", type=float, help="Maximum PE value")
 
-    # macro-assets command
-    macro_parser = subparsers.add_parser("macro-assets", help="Manage macro assets configuration")
-    macro_subparsers = macro_parser.add_subparsers(dest="subcommand", help="Macro assets subcommands")
-    macro_subparsers.add_parser("ls", help="List all macro assets")
-    update_macro_parser = macro_subparsers.add_parser("update", help="Update or create a macro asset")
-    update_macro_parser.add_argument("ticker", help="Asset ticker (e.g. US10Y)")
-    update_macro_parser.add_argument("symbol", help="Provider symbol (e.g. ^TNX)")
-    update_macro_parser.add_argument("provider", choices=["yfinance", "fred"], help="Data provider")
+    # sources command
+    sources_parser = subparsers.add_parser("sources", help="Manage data sources configuration")
+    sources_subparsers = sources_parser.add_subparsers(dest="subcommand", help="Sources subcommands")
+    sources_subparsers.add_parser("ls", help="List all data sources")
+    update_sources_parser = sources_subparsers.add_parser("update", help="Update or create a data source")
+    update_sources_parser.add_argument("ticker", help="Asset ticker (e.g. US10Y)")
+    update_sources_parser.add_argument("symbol", help="Provider symbol (e.g. ^TNX)")
+    update_sources_parser.add_argument("provider", choices=["yfinance", "fred"], help="Data provider")
 
     args = parser.parse_args()
 
@@ -98,13 +98,13 @@ def main():
             list_pe_bands()
         elif args.subcommand == "update":
             update_pe_band(args.ticker, args.min, args.max)
-    elif args.command == "macro-assets":
+    elif args.command == "sources":
         if args.subcommand == "ls":
-            list_macro_assets()
+            list_sources()
         elif args.subcommand == "update":
-            update_macro_asset(args.ticker, args.symbol, args.provider)
+            update_source(args.ticker, args.symbol, args.provider)
         else:
-            print("Usage: irm macro-assets {ls,update}")
+            print("Usage: irm sources {ls,update}")
     else:
         parser.print_help()
 

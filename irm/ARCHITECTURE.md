@@ -389,13 +389,13 @@ graph TD
 
 ---
 
-### 4.8 宏观环境分位点自动化配置与更新管道 (Macro Percentile Pipeline)
+### 4.8 全局数据源自动化配置与同步管道 (Data Sources Pipeline)
 
-该管道旨在提取“客观的宏观水位（例如美元处于历史极高位还是低位）”，并将其作为 `percentile` 属性硬编码写入本体图谱的源头节点（Root Nodes），以驱动 `tracer` 引擎触发极值非线性核爆（或抗跌阻隔）机制。
+该管道旨在提取“客观的市场状态（例如美元处于历史极高位、标普100的实时价格等）”，并将其作为 `percentile` 属性或其他动态指标更新至本体图谱。
 
 #### 1. 架构概览
 
-如同 PE 估值管道，宏观状态同步管道也遵循“配置（由人类/终端设定）与执行（由算力完成）彻底代码级分离”的理念。它同样依托基于 Redis 的高速微服务缓存机制运行：
+数据源同步管道遵循“配置（由终端设定）与执行（由算力完成）彻底代码级分离”的理念。它承载了全系统所有逻辑资产（Ticker）到物理交易所代码（Symbol）的映射关系。
 
 ```mermaid
 graph TD
@@ -415,7 +415,7 @@ graph TD
         FalkorDB[(FalkorDB - Ontology Chart)]
     end
 
-    CLI -->|macro-assets ls/update| ConfigMgr
+    CLI -->|sources ls/update| ConfigMgr
     ConfigMgr -->|HSET/HGETALL| Redis
     MacroUpdater -->|Read Config| Redis
     MacroUpdater -->|Fetch 3Y TimeSeries| YFinance
@@ -426,16 +426,34 @@ graph TD
 
 #### 2. 核心组件说明
 
-*   **配置层 (Redis `irm:config:macro_assets`)**：
-    存储宏观资产的拉取凭证信息（如 `{"US10Y": {"symbol": "^TNX", "provider": "yfinance"}, "JP10Y": {"symbol": "IRLTLT01JPM156N", "provider": "fred"}}`）。支持在运行时通过 API 热拔插新的宏观风向标。
+*   **配置层 (Redis `irm:config:sources`)**：
+    存储所有纳管资产的拉取凭证信息（如 `{"US10Y": {"symbol": "^TNX", "provider": "yfinance"}, "AAPL": {"symbol": "AAPL", "provider": "yfinance"}}`）。
 *   **执行层 (update_macro_states.py)**：
-    1.  **扫描图谱与配置**：交叉比对 Redis 中的宏观配置与本体图中实际存在的节点。
-    2.  **智能提取数据**：根据 `provider` 的要求（透传 `FRED_API_KEY` 等环境变量），透过 OpenBB 向不同的数据源拉取过去 3 年历史日线行情。
-    3.  **计算极值水位**：针对返回的泛型 DataFrame 进行探测（动态探测 `close` 或 `value` 列），并应用 Pandas 的 `rank(pct=True)` 函数提取最后一天的客观所处分位数（百分比等级）。
-    4.  **写回图谱**：更新所有关联宏观变量（`InterestRate`, `Currency`, `Volatility` 等类别）节点本身的 `percentile` 属性。
+    1.  **同步全量配置**：从 Redis `sources` 键中读取最新的符号映射。
+    2.  **拉取历史序列**：通过 OpenBB 向供应商拉取 3 年历史数据。
+    3.  **计算水位 (Percentile)**：应用 `rank(pct=True)` 提取分位数，更新至图谱 Root 节点。
 *   **管理层 (IRM CLI)**：
-    *   `irm macro-assets ls`：查看当前纳管的宏观标的、Symbol 映射对照。
-    *   `irm macro-assets update <ticker> <symbol> <provider>`：动态修改宏观节点对应的现实金融代码或切换数据供应商。
+    *   `irm sources ls`：查看当前纳管的所有标的与代码映射。
+    *   `irm sources update <ticker> <symbol> <provider>`：动态修改或新增标的映射。
+
+---
+
+### 4.9 自动化 Beta 提取与回归演进管道 (Beta Calculation Pipeline)
+
+该管道是系统“自适应能力”的核心，负责定期通过真实市场交易数据提取资产间的线性敏感度（$\beta$）。
+
+#### 1. 业务逻辑
+系统拒绝使用静态硬编码的 Beta，而是通过历史回归得出结论。
+*   **回归区间**：拉取过去 3 年 (156 周) 的数据。
+*   **采样频率**：自动降采样为 **周线 (Weekly)**，以过滤日内噪音，捕捉价值中枢的真实联动。
+
+#### 2. 数学范式对齐 (`metric_type`)
+根据本体图节点上定义的 `metric_type` 自动切换回归算法：
+*   **Rate 类回归**：源节点为 `rate` 时，计算 `diff()` (基点变动) 进行 OLS。
+*   **Price 类回归**：源节点为 `price` 时，计算 `pct_change()` (收益率) 进行 OLS。
+
+#### 3. 统计学显著性防御
+脚本 (`calc_betas.py`) 在回写前强制检查 **P-Value**。只有 $P < 0.1$ 的联动路径才会被更新至图谱，否则判定为“伪相关”，保留专家定义的常识先验值。
 
 ---
 
@@ -447,6 +465,7 @@ graph TD
 可交易或可监测的具体标的，用于唯一标识物种其在宏观结构中的角色。
 *   `ticker` *(String, 必填)*: 唯一标识代码（如 'US10Y', 'AAPL', 'VIX'）。
 *   `name` *(String, 必填)*: 资产的中英文全称或简称。
+*   `metric_type` *(String, 必填)*: **核心计算属性**。`rate` 代表利率/波动率（取差分回归）；`price` 代表价格资产（取收益率回归）。
 *   `region` *(String, 可选)*: 所属地域（如 'US', 'JP'），主要用于宏观利率。
 *   `role` *(String, 可选)*: 宏观角色定义（如 'Global Pricing Anchor'）。
 *   `type` *(String, 可选)*: 资产具体形态（特用于汇率，如 'Fiat Index', 'FX Pair'）。

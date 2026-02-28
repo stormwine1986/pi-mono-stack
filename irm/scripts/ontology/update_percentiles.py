@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import redis
 from urllib.parse import urlparse
 from falkordb import FalkorDB
 from openbb import obb
@@ -9,25 +10,30 @@ from openbb import obb
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class OntologyUpdater:
+class PEPercentileUpdater:
     def __init__(self, graph_name="Graph-001"):
         self.graph_name = graph_name
         
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+        redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
         parsed = urlparse(redis_url)
-        host = parsed.hostname or "localhost"
+        host = parsed.hostname or "127.0.0.1"
         port = parsed.port or 6379
         
         try:
+            # 初始化数据库连接
             self.db = FalkorDB(host=host, port=port)
             self.graph = self.db.select_graph(graph_name)
             logger.info(f"Connected to FalkorDB at {host}:{port}")
+
+            # 初始化 Redis 用于读取配置
+            self.redis_client = redis.Redis(host=host, port=port, decode_responses=True)
+            logger.info(f"Connected to Redis for config at {host}:{port}")
         except Exception as e:
-            logger.error(f"Failed to connect to FalkorDB: {e}")
+            logger.error(f"Initialization Failed: {e}")
             self.graph = None
+            self.redis_client = None
 
     def query_falkor(self, cypher):
-        """执行 Cypher 查询"""
         if not self.graph:
             return None
         try:
@@ -38,86 +44,69 @@ class OntologyUpdater:
 
     def get_valuation_hubs(self):
         """获取所有 PE 枢纽节点"""
-        cypher = "MATCH (h:Hub:Valuation) RETURN ID(h) as node_id, h.target as target, h.name as name"
+        cypher = "MATCH (h:Hub:Valuation) RETURN h.target, id(h), h.name"
         result = self.query_falkor(cypher)
         hubs = []
         if not result or not result.result_set:
             return hubs
 
         for row in result.result_set:
-            try:
-                hubs.append({
-                    "node_id": row[0],
-                    "target": row[1],
-                    "name": row[2]
-                })
-            except (IndexError, TypeError):
-                continue
+            hubs.append({
+                "target": row[0],
+                "node_id": row[1],
+                "name": row[2]
+            })
         return hubs
 
-    def calculate_percentile(self, ticker):
-        """
-        使用 OpenBB 拉取资产的真实 P/E（市盈率）数据，替代原来的单纯收盘价算估值水位。
-        调用 openbb.equity.fundamental.metrics 获取当期的 PE Ratio。
-        由于免费数据源 (yfinance) 可能无法提供长达数十年的每日【历史 PE 走势序列】，
-        此处的简易方案使用当前最新 PE 与该资产硬编码或简单计算的历史 PE 经验带(Bands)做比较，
-        映射出一个 0.0 到 1.0 的 percentile 估值水位。
-        """
+    def calculate_pe_percentile(self, ticker):
+        """拉取实时 PE 并结合 Redis 估值带计算百分位"""
         try:
+            logger.info(f"Fetching fundamental metrics for {ticker} via yfinance...")
             # 获取最新基本面指标
             fund_data = obb.equity.fundamental.metrics(ticker, provider="yfinance")
             df_metrics = fund_data.to_dataframe()
             
-            if df_metrics.empty or 'pe_ratio' not in df_metrics.columns:
-                logger.warning(f"No P/E data found for {ticker}")
+            if df_metrics.empty:
+                logger.warning(f"No metrics data returned for {ticker}")
+                return None
+            
+            # yfinance 的 metrics 返回通常包含 pe_ratio 列
+            pe_col = [c for c in df_metrics.columns if 'pe' in c.lower() and 'ratio' in c.lower()]
+            if not pe_col:
+                logger.warning(f"PE ratio column not found for {ticker}")
                 return None
                 
-            current_pe = float(df_metrics['pe_ratio'].iloc[-1])
-            logger.info(f"Target {ticker} Current P/E: {current_pe}")
+            current_pe = float(df_metrics[pe_col[0]].iloc[-1])
+            logger.info(f"Target {ticker} Current P/E: {current_pe:.2f}")
             
-            # --- 从 Redis 分布式配置中心读取历史 PE 经验带(Bands) ---
-            # 存储结构为 Redis Hash: 
-            #   Key: irm:config:pe_bands
-            #   Field: <ticker> (e.g., "AAPL")
-            #   Value: JSON {"min": 12.0, "max": 35.0}
+            # 从 Redis 获取 Bands
+            val_min, val_max = 10.0, 40.0  # 默认宽带
             
-            val_min, val_max = 10.0, 40.0  # 全局默认均值带
-            
-            if self.redis_client:
-                band_data = self.redis_client.hget("irm:config:pe_bands", ticker)
-                if band_data:
-                    try:
-                        band = json.loads(band_data)
-                        val_min = float(band.get("min", val_min))
-                        val_max = float(band.get("max", val_max))
-                        logger.info(f"Loaded PE bands for {ticker} from Redis: [{val_min}, {val_max}]")
-                    except Exception as e:
-                        logger.error(f"Failed to parse PE band for {ticker} from Redis: {e}, falling back to defaults")
-                else:
-                    logger.warning(f"No PE band configured in Redis for {ticker} (Key: irm:config:pe_bands), using default [{val_min}, {val_max}]")
+            band_data = self.redis_client.hget("irm:config:pe_bands", ticker)
+            if band_data:
+                band = json.loads(band_data)
+                val_min = float(band.get("min", val_min))
+                val_max = float(band.get("max", val_max))
+                logger.info(f"Using Redis Bands for {ticker}: [{val_min}, {val_max}]")
+            else:
+                logger.warning(f"No PE bands in Redis for {ticker}, using fallback defaults.")
 
-            # 线性插值计算当前水位
+            # 线性映射 0.0 - 1.0 (带极值修剪)
             if current_pe <= val_min:
-                percentile = 0.01  # 极度低估 1%
+                percentile = 0.01
             elif current_pe >= val_max:
-                percentile = 0.99  # 极度高估 99%
+                percentile = 0.99
             else:
                 percentile = (current_pe - val_min) / (val_max - val_min)
                 
             return percentile
             
         except Exception as e:
-            logger.error(f"Failed to calculate fundamental percentile for {ticker}: {e}")
+            logger.error(f"Failed to calculate percentile for {ticker}: {e}")
             return None
 
-    def update_hub_percentile(self, node_id, new_percentile):
-        """更新图谱中 Hub 节点的 percentile 属性"""
-        cypher = f"MATCH (h:Hub:Valuation) WHERE ID(h) = {node_id} SET h.percentile = {new_percentile:.4f}"
-        self.query_falkor(cypher)
-
     def run(self):
-        if not self.graph:
-            logger.error("Database connection missing. Exiting.")
+        if not self.graph or not self.redis_client:
             return
 
         hubs = self.get_valuation_hubs()
@@ -126,19 +115,14 @@ class OntologyUpdater:
         for hub in hubs:
             target = hub['target']
             node_id = hub['node_id']
-            name = hub['name']
             
-            logger.info(f"Processing target: {target} ({name}) ...")
-            
-            percentile = self.calculate_percentile(target)
+            percentile = self.calculate_pe_percentile(target)
             
             if percentile is not None:
-                logger.info(f"  -> Calculated Percentile: {percentile:.4f}")
-                self.update_hub_percentile(node_id, percentile)
-                logger.info(f"  -> Successfully updated DB for {target}")
-            else:
-                logger.warning(f"  -> Skipping update for {target} due to calculation failure")
+                cypher = f"MATCH (h:Hub) WHERE id(h) = {node_id} SET h.percentile = {percentile:.4f}"
+                self.query_falkor(cypher)
+                logger.info(f"Successfully updated {target} P/E Percentile: {percentile:.4f}")
 
 if __name__ == "__main__":
-    updater = OntologyUpdater()
+    updater = PEPercentileUpdater()
     updater.run()

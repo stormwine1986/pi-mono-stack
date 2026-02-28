@@ -45,7 +45,7 @@ class MacroStateUpdater:
             return {}
         
         try:
-            assets = self.redis_client.hgetall("irm:config:macro_assets")
+            assets = self.redis_client.hgetall("irm:config:sources")
             config = {}
             for ticker, data_str in assets.items():
                 config[ticker] = json.loads(data_str)
