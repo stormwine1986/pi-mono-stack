@@ -41,6 +41,35 @@ def update_pe_band(ticker, min_pe, max_pe):
     r.hset("irm:config:pe_bands", ticker, json.dumps(data))
     print(f"Successfully updated PE band for {ticker}: [{min_pe}, {max_pe}]")
 
+def list_eps_bands():
+    r = get_redis_client()
+    bands = r.hgetall("irm:config:eps_bands")
+    
+    if not bands:
+        print("No EPS growth bands configured in Redis.")
+        return
+
+    print(f"{'Ticker':<10} | {'Min Growth':<12} | {'Max Growth':<12}")
+    print("-" * 40)
+    for ticker, data_str in sorted(bands.items()):
+        try:
+            data = json.loads(data_str)
+            min_g = data.get("min", "N/A")
+            max_g = data.get("max", "N/A")
+            print(f"{ticker:<10} | {min_g:<12} | {max_g:<12}")
+        except Exception:
+            print(f"{ticker:<10} | Error parsing data: {data_str}")
+
+def update_eps_band(ticker, min_growth, max_growth):
+    r = get_redis_client()
+    data = {
+        "min": float(min_growth),
+        "max": float(max_growth),
+        "metric": "earnings_growth"
+    }
+    r.hset("irm:config:eps_bands", ticker, json.dumps(data))
+    print(f"Successfully updated EPS growth band for {ticker}: [{min_growth}, {max_growth}]")
+
 def list_sources():
     r = get_redis_client()
     assets = r.hgetall("irm:config:sources")
@@ -91,6 +120,15 @@ def main():
     update_sources_parser.add_argument("symbol", help="Provider symbol (e.g. ^TNX)")
     update_sources_parser.add_argument("provider", choices=["yfinance", "fred"], help="Data provider")
 
+    # eps-bands command
+    eps_parser = subparsers.add_parser("eps-bands", help="Manage EPS growth bands configuration")
+    eps_subparsers = eps_parser.add_subparsers(dest="subcommand", help="EPS bands subcommands")
+    eps_subparsers.add_parser("ls", help="List all EPS bands")
+    update_eps_parser = eps_subparsers.add_parser("update", help="Update or create an EPS growth band")
+    update_eps_parser.add_argument("ticker", help="Asset ticker (e.g. AAPL)")
+    update_eps_parser.add_argument("min", type=float, help="Minimum growth value (e.g. 0.05 for 5%)")
+    update_eps_parser.add_argument("max", type=float, help="Maximum growth value (e.g. 0.20 for 20%)")
+
     args = parser.parse_args()
 
     if args.command == "pe-bands":
@@ -105,6 +143,13 @@ def main():
             update_source(args.ticker, args.symbol, args.provider)
         else:
             print("Usage: irm sources {ls,update}")
+    elif args.command == "eps-bands":
+        if args.subcommand == "ls":
+            list_eps_bands()
+        elif args.subcommand == "update":
+            update_eps_band(args.ticker, args.min, args.max)
+        else:
+            print("Usage: irm eps-bands {ls,update}")
     else:
         parser.print_help()
 

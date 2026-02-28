@@ -75,11 +75,11 @@ class MacroStateUpdater:
         return assets
 
     def calculate_macro_percentile(self, asset_ticker, config):
-        """计算宏观资产的历史分位点"""
+        """计算宏观资产的历史分位点及当前值"""
         asset_config = config.get(asset_ticker)
         if not asset_config:
             logger.warning(f"No config found for {asset_ticker}")
-            return None
+            return None, None
 
         symbol = asset_config['symbol']
         provider = asset_config['provider']
@@ -93,12 +93,12 @@ class MacroStateUpdater:
             elif provider == 'fred':
                 if not self.fred_api_key:
                     logger.error(f"Cannot fetch {asset_ticker} from fred: Missing FRED_API_KEY")
-                    return None
+                    return None, None
                 # 使用 fred_api_key 参数传入
                 res = obb.economy.fred_series(symbol=symbol, provider='fred', start_date=start_date, api_key=self.fred_api_key)
             else:
                 logger.error(f"Unsupported provider: {provider}")
-                return None
+                return None, None
 
             df = res.to_dataframe()
             
@@ -112,21 +112,21 @@ class MacroStateUpdater:
             
             if df.empty or not value_col or value_col not in df.columns:
                 logger.warning(f"No valid data column for {symbol} ({provider}). Columns: {df.columns.tolist()}")
-                return None
+                return None, None
             
-            # 计算分位点
-            current_value = df[value_col].iloc[-1]
-            percentile = df[value_col].rank(pct=True).iloc[-1]
+            # 计算分位点和当前值
+            current_value = float(df[value_col].iloc[-1])
+            percentile = float(df[value_col].rank(pct=True).iloc[-1])
             
             logger.info(f"Asset {asset_ticker} ({symbol} via {provider}) Value: {current_value:.4f}, Percentile: {percentile:.4f}")
-            return percentile
+            return percentile, current_value
         except Exception as e:
             logger.error(f"Failed to calculate percentile for {asset_ticker} via {provider}: {e}")
-            return None
+            return None, None
 
-    def update_node_percentile(self, ticker, percentile):
-        """同步回 FalkorDB"""
-        cypher = f"MATCH (a:Asset {{ticker: '{ticker}'}}) SET a.percentile = {percentile:.4f}"
+    def update_node_state(self, ticker, percentile, value):
+        """同步回 FalkorDB (百分位与物理值)"""
+        cypher = f"MATCH (a:Asset {{ticker: '{ticker}'}}) SET a.percentile = {percentile:.4f}, a.value = {value:.4f}"
         self.query_falkor(cypher)
 
     def run(self):
@@ -145,10 +145,10 @@ class MacroStateUpdater:
         
         # 3. 逐个更新
         for ticker in macro_tickers:
-            percentile = self.calculate_macro_percentile(ticker, config)
-            if percentile is not None:
-                self.update_node_percentile(ticker, percentile)
-                logger.info(f"Successfully updated {ticker} percentile in DB.")
+            percentile, value = self.calculate_macro_percentile(ticker, config)
+            if percentile is not None and value is not None:
+                self.update_node_state(ticker, percentile, value)
+                logger.info(f"Successfully updated {ticker} (p={percentile:.4f}, v={value:.4f}) in DB.")
 
 if __name__ == "__main__":
     updater = MacroStateUpdater()

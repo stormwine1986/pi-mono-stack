@@ -28,6 +28,9 @@ case "$COMMAND" in
     sources)
         python3 /app/scripts/analyzer/config_manager.py sources "$@"
         ;;
+    eps-bands)
+        python3 /app/scripts/analyzer/config_manager.py eps-bands "$@"
+        ;;
     help|*)
         echo "IRM (Investment Risk Management) CLI"
         echo "Usage: irm <command> [options]"
@@ -39,6 +42,7 @@ case "$COMMAND" in
         echo "  nodes     - List all entities in the graph (excluding portfolios)"
         echo "  init-db   - Sync/Initialize graph schema from SCHEMA.cypher"
         echo "  pe-bands  - Manage PE bands configuration (ls, update)"
+        echo "  eps-bands - Manage EPS growth bands configuration (ls, update)"
         echo "  sources   - Manage data sources configuration (ls, update)"
         echo ""
         echo "Use 'irm <command> --help' for more information on a specific command."

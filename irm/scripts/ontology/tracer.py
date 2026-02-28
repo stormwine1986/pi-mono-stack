@@ -84,6 +84,17 @@ class IRMTracer:
                 continue
         return neighbors
 
+    def get_vix_state(self):
+        """Fetch the current market VIX value from the graph."""
+        cypher = "MATCH (a:Asset {ticker: 'VIX'}) RETURN a.value"
+        result = self._query_falkor(cypher)
+        if result and result.result_set:
+            try:
+                return float(result.result_set[0][0])
+            except (ValueError, TypeError, IndexError):
+                pass
+        return 20.0  # Conservative fallback
+
     def _calculate_mu(self, percentile, threshold_config_str):
         """
         Dynamically calculate the State Modifier (mu) based on JSON threshold rules.
@@ -113,7 +124,8 @@ class IRMTracer:
         queue = [(start_ticker, float(initial_delta), 0, start_ticker)]
         results = []
 
-        print(f"[*] Starting Trace: {start_ticker} with Delta: {initial_delta}")
+        print(f"[*] Starting Trace: {start_ticker} with Delta: {initial_delta}%")
+        print(f"[*] Market Context - Base VIX: {current_vix}")
         print("-" * 60)
 
         while queue:
@@ -130,8 +142,10 @@ class IRMTracer:
                 
                 # 2. Gamma (Volatility Accelerator)
                 gamma = 1.0
-                if n['gamma_sensitive'] and current_vix > 30:
-                    gamma = 1.5 if current_vix <= 45 else 2.5
+                if n['gamma_sensitive']:
+                    # Use the effective VIX (which might include a shock) for Gamma
+                    if current_vix > 30:
+                        gamma = 1.5 if current_vix <= 45 else 2.5
                 
                 # 3. DYNAMIC State Modifier (mu) - JSON Config Driven!
                 if n['modifier_metric'] == 'source_percentile':
@@ -175,14 +189,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRM Ontology Tracer")
     parser.add_argument("--ticker", required=True, help="Source ticker (e.g., US10Y)")
     parser.add_argument("--delta", type=float, default=1.0, help="Initial shock percentage (e.g., 1.0 for +1%)")
-    parser.add_argument("--vix", type=float, default=20, help="Current VIX level")
     parser.add_argument("--owner", type=str, default="Admin", help="Portfolio Owner")
     
     args = parser.parse_args()
     
     tracer = IRMTracer()
     
-    # 1. Dynamically Load Portfolio
+    # 1. Fetch current market VIX from graph
+    base_vix = tracer.get_vix_state()
+    
+    # 2. Calculate effective VIX for the trace
+    # If we are shocking VIX itself, the effective VIX for Gamma should reflect the shock.
+    effective_vix = base_vix
+    if args.ticker == "VIX":
+        effective_vix = base_vix * (1 + args.delta / 100.0)
+    
+    # 3. Dynamically Load Portfolio
     portfolio = tracer.get_portfolio_assets(owner=args.owner)
     if not portfolio:
          print(f"[!] Warning: Portfolio for '{args.owner}' not found or empty.")
@@ -190,10 +212,10 @@ if __name__ == "__main__":
     else:
          portfolio_assets = list(portfolio.keys())
          
-    # 3. Run Trace - Now with dynamic internal path-specific logic
-    impacts = tracer.trace_impact(args.ticker, args.delta, current_vix=args.vix)
+    # 4. Run Trace with automatically determined VIX
+    impacts = tracer.trace_impact(args.ticker, args.delta, current_vix=effective_vix)
     
-    # 4. Aggregate Portfolio Summary
+    # 5. Aggregate Portfolio Summary
     print("\n" + "="*20 + " PORTFOLIO IMPACT SUMMARY " + "="*20)
     
     # Initialize all portfolio assets to 1.0 multiplier (no change)

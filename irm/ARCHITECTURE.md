@@ -202,33 +202,6 @@ $$Impact(B) = \Delta A \times \Big( \beta \times \mu(A_{current\_state}) \times 
 
 ---
 
-### 3.4 落地演练示例：宏微观共振下的“戴维斯双杀”计算与归因
-
-**场景设定**：
-*   **事件**：中东冲突导致原油供给突发中断（系统给到初始冲击 $\Delta Oil = +10\%$）。同日公布的新增非农就业也大超预期。
-*   **市场现状**：油价本身处于高位（>85% 分位，引发市场对二次通胀的极度恐慌）。
-*   **已知图谱拓扑路径**：
-    1. **成本传导端**：`Oil` $\xrightarrow{\text{base\_beta}=-0.5}$ `Airlines 板块` $\xrightarrow{\text{base\_beta}=1.2, D=0.8}$ **达美航空盈利预期枢纽** (`EPS_DAL`)
-    2. **利率传导端**：`Oil` $\xrightarrow{\text{percentile\_amplifier}}$ `US10Y` (高位油价引爆通胀与利率飙升) $\xrightarrow{\text{margin\_dampener}}$ **达美航空估值枢纽** (`PE_DAL`，目前DAL估值仅在历史15%极低水位)
-
-**系统并行引擎计算推演：**
-
-**1. 路径一 (基本面侧)：油价重挫基本面，打击 EPS 枢纽**
-*   $\Delta Oil$ 源头冲击 $= +10$
-*   `Oil -> Airlines`：线性传导 $\beta = -0.5$ (航空公司燃油成本上升)。由于这是基本面物理传导，不附带情绪乘数。板块冲击 = -5.0。
-*   `Airlines -> EPS_DAL`：相对波动敏感度 $\beta = 1.2$。图距离衰减常数 $D = 0.8$。
-*   **引擎推导结果**：EPS 枢纽冲击负荷 $= -5.0 \times 0.8 \times 1.2 = \mathbf{-4.8}$。
-
-**2. 路径二 (流动性侧)：通胀预期推高利率，打击 PE 枢纽**
-*   **第一幕 (`Oil -> US10Y`)**：由于油价本身处于95%极高分位，落入了边上 `threshold_config` 中配置的极值区间（对应语义标签 `percentile_amplifier`）。原本线性的恐慌被计算引擎根据 JSON 规则转化为如 1.5倍 的指数级冲击，推算 `US10Y` 将被暴力推高。
-*   **第二幕 (`US10Y -> PE_DAL`)**：DAL 作为传统价值股，虽然遭遇宏观贴现率上行的打击。但由于引擎读取到其 PE 水位仅为极为便宜的 `15%`，命中 `threshold_config` 中的安全区间（语义上属于 `margin_dampener` 效应）。引擎据此将乘数 $\mu$ 自动解析为 0.25 的“抗跌海绵区”。
-*   **引擎推导结果**：尽管宏观资金面崩塌，其杀估值效应被其自身的“厚实安全垫”依据配置极大地过滤阻绝。最终 PE 枢纽受到的冲击负荷仅为 $\mathbf{-1.2}$。
-
-**最终 LLM 将引擎数学推演转化为交易建议（归因溯源与投告输出）**：
-*"【风控预警】：系统侦测到您的持仓标的【达美航空 DAL】遭受双重穿透打击。经图谱归因诊断，主要风险来自于微观层面的【杀业绩】（底层 Oil 飙升精准命中 EPS_DAL 产生 -4.8 的大幅下修冲击）；而在右侧【杀估值】层面，由于该资产当前处于极低绝对估值，触发了边缘侧 `margin_dampener` 防御机制，估值端反而构筑了护城河（仅引发 -1.2 压制）。综合判定：虽然避免了灾难性的戴维斯双杀（泡沫共振），但利润基盘确认受损。系统判定其上涨胜率下降，**凯利公式控制模块建议您将对应仓位锁损并缩减 25%**。"*
-
----
-
 ## 4. 技术落地方案
 
 ### 4.1 模块交互工作流 (Workflow)
@@ -360,7 +333,8 @@ graph TD
     subgraph "IRM Container"
         CLI[IRM CLI / irm.sh]
         ConfigMgr[config_manager.py]
-        Updater[update_percentiles.py]
+        ValUpdate[update_percentiles.py]
+        EarnUpdate[update_earnings.py]
     end
 
     subgraph "Infrastructures"
@@ -368,24 +342,29 @@ graph TD
         FalkorDB[(FalkorDB - Ontology Chart)]
     end
 
-    CLI -->|update/ls| ConfigMgr
+    CLI -->|pe/eps-bands update| ConfigMgr
     ConfigMgr -->|HSET/HGETALL| Redis
-    Updater -->|Read Bands| Redis
-    Updater -->|Fetch P/E| OpenBB
-    Updater -->|Update Nodes| FalkorDB
-    FalkorDB -->|Scan Hubs| Updater
+    ValUpdate -->|PE Bands| Redis
+    ValUpdate -->|Fetch PE| OpenBB
+    ValUpdate -->|Update Hub:Valuation| FalkorDB
+    EarnUpdate -->|EPS Bands| Redis
+    EarnUpdate -->|Fetch EPS Growth| OpenBB
+    EarnUpdate -->|Update Hub:Earnings| FalkorDB
 ```
 
 #### 2. 核心组件说明
 
-*   **配置层 (Redis)**：采用 Redis Hash (`irm:config:pe_bands`) 存储资产的估值特征带。将“个股常态区间”这类业务先验信息解耦出代码，支持热更新。
-*   **执行层 (update_percentiles.py)**：
-    1.  **扫描图谱**：查询所有 `(h:Hub:Valuation)` 节点。
-    2.  **拉取数据**：调用 `openbb.equity.fundamental.metrics` 获取实时 `pe_ratio`。
-    3.  **水位映射**：从 Redis 获取该 Ticker 的 `[min, max]` 区间，通过线性插值计算当前水位。
+*   **配置层 (Redis)**：
+    *   `irm:config:pe_bands`: 存储 Ticker 对应的 PE 经验区间（用于杀估值判定）。
+    *   `irm:config:eps_bands`: 存储 Ticker 对应的盈利增速预期区间（用于杀业绩判定）。
+*   **执行层 (update_percentiles.py / update_earnings.py)**：
+    1.  **扫描图谱**：查询所有 `(h:Hub:Valuation)` 或 `(h:Hub:Earnings)` 节点。
+    2.  **拉取数据**：调用 `openbb` 获取 `pe_ratio` 或 `earnings_growth` (Forward EPS Growth)。
+    3.  **水位映射**：依据 Redis 中的 `[min, max]` 区间，将绝对指标映射为 **0.0 - 1.0** 的拥挤度分位（Percentile）。
     4.  **写回图谱**：更新 `Hub` 节点的 `percentile` 属性。
 *   **管理层 (IRM CLI)**：
-    *   `irm pe-bands update <ticker> <min> <max>`：新增或修改配置。
+    *   `irm pe-bands update <ticker> <min> <max>`
+    *   `irm eps-bands update <ticker> <min> <max>`
 
 ---
 
@@ -421,17 +400,18 @@ graph TD
     MacroUpdater -->|Fetch 3Y TimeSeries| YFinance
     MacroUpdater -->|Fetch 3Y TimeSeries| FRED
     MacroUpdater -->|Calculate rank(pct=True)| MacroUpdater
-    MacroUpdater -->|Update Source Nodes| FalkorDB
+    MacroUpdater -->|Update Value & Percentile| FalkorDB
 ```
 
 #### 2. 核心组件说明
 
 *   **配置层 (Redis `irm:config:sources`)**：
-    存储所有纳管资产的拉取凭证信息（如 `{"US10Y": {"symbol": "^TNX", "provider": "yfinance"}, "AAPL": {"symbol": "AAPL", "provider": "yfinance"}}`）。
+    存储所有纳管资产的拉取凭证信息（如 `{"US10Y": {"symbol": "^TNX", "provider": "yfinance"}}`）。
 *   **执行层 (update_macro_states.py)**：
-    1.  **同步全量配置**：从 Redis `sources` 键中读取最新的符号映射。
-    2.  **拉取历史序列**：通过 OpenBB 向供应商拉取 3 年历史数据。
-    3.  **计算水位 (Percentile)**：应用 `rank(pct=True)` 提取分位数，更新至图谱 Root 节点。
+    1.  **拉取历史序列**：通过 OpenBB 向供应商拉取 3 年历史数据。
+    2.  **计算水位 (Percentile)**：应用 `rank(pct=True)` 提取分位数。
+    3.  **提取物理值 (Value)**：保留资产的最新报价数据（如 VIX 报价 15.3 或 BTC 价格）。
+    4.  **更新图谱**：同步设置 `Asset` 节点的 `percentile` 和 `value` 属性。
 *   **管理层 (IRM CLI)**：
     *   `irm sources ls`：查看当前纳管的所有标的与代码映射。
     *   `irm sources update <ticker> <symbol> <provider>`：动态修改或新增标的映射。
@@ -465,6 +445,8 @@ graph TD
 可交易或可监测的具体标的，用于唯一标识物种其在宏观结构中的角色。
 *   `ticker` *(String, 必填)*: 唯一标识代码（如 'US10Y', 'AAPL', 'VIX'）。
 *   `name` *(String, 必填)*: 资产的中英文全称或简称。
+*   `value` *(Float, 动态脚本维护)*: **当前物理报价/指标值**。引擎（`tracer.py`）利用该值判定是否触发边上的阶跃阈值，或以此计算扰动后的新环境水位。
+*   `percentile` *(Float, 动态脚本维护)*: 该资产在 3 年历史区间内的分位水位。
 *   `metric_type` *(String, 必填)*: **核心计算属性**。`rate` 代表利率/波动率（取差分回归）；`price` 代表价格资产（取收益率回归）。
 *   `region` *(String, 可选)*: 所属地域（如 'US', 'JP'），主要用于宏观利率。
 *   `role` *(String, 可选)*: 宏观角色定义（如 'Global Pricing Anchor'）。
@@ -531,3 +513,57 @@ IRM 系统的投顾和凯利公式重分配目标。
 *   `shares` *(Float)*: 持有的具体份额数。
 *   `avg_cost` *(Float)*: 用户交易建仓的基础成本。
 *   `formula` *(String)*: 转化公式口径释义（如 `P=EPS*PE`）。
+
+---
+
+## 5. 系统部署与容器拓扑 (System Deployment & Topology)
+
+IRM 模块采用高度解耦的微服务/容器化设计，以确保计算引擎与数据存储的独立扩展性。
+
+### 5.1 容器集群架构
+
+系统由两个核心容器组成，通过 Docker 内部网络进行高速通信：
+
+*   **网络模式 (Network Mode)**：采用 **Host Mode** (`--network host`)。容器直连宿主机网络协议栈，消除 NAT 损耗，确保大规模图数据查询与回归运算的毫秒级响应。在此模式下，容器内部通过 `localhost:6379` 互联。
+
+1.  **`irm` 算力容器 (Python Compute Engine)**
+    *   **角色**：承载所有的业务逻辑与数据管道（Pipelines）。
+    *   **组件**：包含 OpenBB SDK、图计算引擎 (`tracer.py`)、凯利公式决策器、以及各项属性同步脚本。
+    *   **交互**：从外界（OpenBB/FRED）拉取金融数据，并向 `redis` 容器发起 Cypher 查询和配置读写。
+
+2.  **`redis` 存储容器 (FalkorDB + Config Store)**
+    *   **角色**：混合型数据中枢。
+    *   **FalkorDB**：作为图数据库（默认 6379 端口），存储整个本体图谱（Nodes/Edges）。
+    *   **Redis Key-Value**：作为配置中心（`irm:config:*`），存储 PE/EPS 的经验带（Bands）和数据源映射。
+
+### 5.2 网络拓扑与数据流向
+
+```mermaid
+graph LR
+    subgraph "Host Network (Standardized on localhost)"
+        IRM[irm 容器] -- "Cypher/Redis (127.0.0.1:6379)" --> DB["redis 容器 (FalkorDB)"]
+    end
+
+    Internet((Internet)) -- "API (OpenBB/FRED)" --> IRM
+    User((User)) -- "CLI (irm.sh)" --> IRM
+```
+
+### 5.3 生产环境部署建议
+
+*   **持久化**：`redis` 容器必须挂载外部卷，以防 FalkorDB 中的本体图谱数据在容器重启时丢失。
+*   **凭证管理**：所有的 API Key（如 `FRED_API_KEY`）应通过 Docker Environment 或 `.env` 文件注入 `irm` 容器，严禁硬编码在脚本中。
+*   **连接配置**：`irm` 算力引擎与 `redis` 存储层的连接串统一由环境变量 **`REDIS_URL`** 定义（例如：`redis://localhost:6379`）。系统内部所有脚本（如 `tracer.py`, `update_earnings.py`）均通过该变量初始化数据库客户端连接。
+*   **资源配额**：由于 `calc_betas.py` 等脚本涉及大规模回归运算，且 `falkordb` 在进行深度路径遍历时具有一定的内存开销，建议为 `irm` 和 `redis` 容器设置合理的内存上限。
+
+### 5.4 部署与构建指令 (Commands)
+
+系统推荐使用顶层控制工具 `stack-ctl` 进行标准化的构建与部署：
+
+*   **全量构建与启动**：
+    ```bash
+    # 在项目根目录下执行，自动完成镜像构建与容器编排
+    stack-ctl build irm
+    stack-ctl up irm
+    ```
+*   **状态同步与热重载**：
+    如果仅修改了脚本内容而无需重构镜像，可利用 `docker cp` 将代码推送到正在运行的容器中，或通过 `stack-ctl` 触发配置滚动更新。
