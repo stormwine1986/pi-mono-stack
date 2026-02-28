@@ -343,6 +343,53 @@ irm/scripts/
 
 ---
 
+### 4.7 P/E 百分位自动化更新管道 (PE Percentile Pipeline)
+
+该管道旨在自动执行从外部金融市场（OpenBB）拉取实时市盈率（P/E），并根据配置的经验带（Bands）计算资产估位（Percentile），最后将计算结果持久化到 FalkorDB 本体图谱中，以驱动风控引擎的动态传导。
+
+#### 1. 架构概览
+
+系统采用 **“配置与逻辑分离”** 的设计模式，主要由三部分组成：分布式配置中心（Redis）、数据采集执行器（Python/OpenBB）和本体知识图谱（FalkorDB）。
+
+```mermaid
+graph TD
+    subgraph "External"
+        OpenBB[OpenBB SDK / yfinance]
+    end
+
+    subgraph "IRM Container"
+        CLI[IRM CLI / irm.sh]
+        ConfigMgr[config_manager.py]
+        Updater[update_percentiles.py]
+    end
+
+    subgraph "Infrastructures"
+        Redis[(Redis - Config Store)]
+        FalkorDB[(FalkorDB - Ontology Chart)]
+    end
+
+    CLI -->|update/ls| ConfigMgr
+    ConfigMgr -->|HSET/HGETALL| Redis
+    Updater -->|Read Bands| Redis
+    Updater -->|Fetch P/E| OpenBB
+    Updater -->|Update Nodes| FalkorDB
+    FalkorDB -->|Scan Hubs| Updater
+```
+
+#### 2. 核心组件说明
+
+*   **配置层 (Redis)**：采用 Redis Hash (`irm:config:pe_bands`) 存储资产的估值特征带。将“个股常态区间”这类业务先验信息解耦出代码，支持热更新。
+*   **执行层 (update_percentiles.py)**：
+    1.  **扫描图谱**：查询所有 `(h:Hub:Valuation)` 节点。
+    2.  **拉取数据**：调用 `openbb.equity.fundamental.metrics` 获取实时 `pe_ratio`。
+    3.  **水位映射**：从 Redis 获取该 Ticker 的 `[min, max]` 区间，通过线性插值计算当前水位。
+    4.  **写回图谱**：更新 `Hub` 节点的 `percentile` 属性。
+*   **管理层 (IRM CLI)**：
+    *   `irm pe-bands ls`：查看所有定义。
+    *   `irm pe-bands update <ticker> <min> <max>`：新增或修改配置。
+
+---
+
 ## 附录：核心实体节点 (Node Types) 与物理属性定义库
 
 在 IRM 本体论中，节点(Node) 严格遵守“只保留客观事实”的解耦原则。所有的业务敏感度、传导方向和放大乘数一律挂载在边(Edge)上。

@@ -5,7 +5,9 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies for risk management
 RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
-    pip install --no-cache-dir requests pandas numpy scipy redis falkordb
+    pip install --no-cache-dir requests pandas numpy scipy redis falkordb openbb && \
+    python -c "from openbb import obb" || true && \
+    chmod -R 777 /usr/local/lib/python3.11/site-packages/openbb /usr/local/lib/python3.11/site-packages/openbb_core || true
 
 # Create non-root user and set up app directory
 RUN mkdir /app && groupadd -g 1000 pi-mono && \
