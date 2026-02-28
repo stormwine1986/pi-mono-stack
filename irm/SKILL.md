@@ -1,66 +1,59 @@
 ---
 name: "irm"
-description: "Investment Risk Management (IRM) based on Ontological Knowledge Graphs. Use this for macro-to-micro impact propagation, non-linear risk assessment, and Kelly-based portfolio optimization."
+description: "基于本体知识图谱的投资风险管理 (IRM) 模块。用于宏观到微观的影响传导分析、非线性风险评估以及基于凯利公式的仓位优化。"
 ---
 
-# Ontological Risk Management (IRM) Skill
+# 本体论风控 (IRM) 技能
 
-This skill leverages a **Neuro-Symbolic** approach to financial risk: using Knowledge Graphs (FalkorDB) to model market causality and Python-based engines to calculate non-linear risk propagation.
+本技能采用 **神经符号 (Neuro-Symbolic)** 架构处理金融风险：利用知识图谱 (FalkorDB) 建模市场因果律，并结合 Python 算法引擎计算风险的非线性传导。
 
-## Core Capabilities
+## 核心能力
 
-- **Ontological Path Tracing**: Trace how macro shocks (Interest Rates, Oil, Volatility) ripple through sectors and fundamental hubs (PE/EPS) to impact specific assets.
-- **Non-Linear State Modifiers**: Calculate extreme scenario impacts using JSON-driven `threshold_config` for amplifiers and dampeners.
-- **Portfolio & Node Exploration**: Explore graph entities and audit real-time portfolio allocation status directly from the CLI.
-- **Kelly Portfolio Optimization**: Get position sizing advice based on Bayesian win-rate adjustments derived from graph-traced impact scores.
-- **Schema Lifecycle**: Initialize or evolve the financial ontology and its non-linear rules directly from the project workspace.
+- **本体路径追踪**: 追踪宏观冲击（利率、原油、波动率）如何穿透行业和基本面枢纽（PE/EPS），最终影响具体资产。
+- **非线性状态修饰**: 利用 JSON 驱动的 `threshold_config` 配置，计算极值环境下的风险放大或吸收效应。
+- **配置管理**: 管理存储在 Redis 中的经验区间（PE/EPS Bands）和数据源映射。
+- **自动化数据管道**: 将实时价格、估值 (PE) 和盈利预期 (EPS Growth) 从外部供应商同步至知识图谱。
+- **组合与节点探索**: 通过 CLI 直接探索图谱实体，并审计实时的资产配置状态。
+- **凯利公式仓位优化**: 根据图谱追踪得出的影响分值，自动修正贝叶斯胜率并给出调仓建议。
 
-## Usage
+## 使用方法
 
-All operations are executed via the `irm` CLI within the dedicated Docker container.
+所有操作均通过 Docker 容器内的 `irm` CLI 执行。**禁止**使用 `docker exec irm irm init-db` 命令初始化数据库。**禁止**直接读取cyper文件。
 
-### 1. Initialize/Sync Database
-Sync the ontology schema from the workspace (`.pi/agent/workspace/.irm/SCHEMA.cypher`) to FalkorDB:
+### 1. 配置与区间 (Bands) 管理
+管理用于分位数映射的经验区间和数据源：
 ```bash
-docker exec irm irm init-db
+# 查看或更新 PE 经验带
+docker exec irm irm pe-bands ls
+docker exec irm irm pe-bands update <ticker> <min> <max>
+
+# 查看或更新 EPS 增长经验带
+docker exec irm irm eps-bands ls
+docker exec irm irm eps-bands update <ticker> <min> <max>
+
+# 查看或更新数据源映射
+docker exec irm irm sources ls
+docker exec irm irm sources update <ticker> <symbol> <provider>
 ```
 
-### 2. Trace Market Impacts
-Simulate a shock to a macro node and see the ripple effect on your portfolio:
+### 2. 追踪市场冲击
+模拟宏观节点受到的冲击，并查看其对投资组合的涟漪效应：
 ```bash
-# Example: US 10-Year Yield rises by 5% (relative) with VIX at 35
-docker exec irm irm tracer --ticker "AI Application" --delta -2.0 --vix 35 --owner Admin
+# 示例：美债 10 年期收益率上升 0.5 (相对 Delta)
+docker exec irm irm tracer --ticker "US10Y" --delta 0.5 --owner Admin
 ```
 
-### 3. Explore Graph Entities
-List all entities in the graph (excluding portfolios) to check status or percentiles:
+### 3. 探索与审计
 ```bash
+# 查看图谱节点状态
 docker exec irm irm nodes
-```
 
-### 4. Direct Portfolio Audit
-List the current asset allocation and cost basis for a specific owner:
-```bash
+# 查看持仓组合详情
 docker exec irm irm portfolio --owner Admin
 ```
 
-### 5. Get Portfolio Advice
-Input impact scores and current weights to get Kelly-based trade suggestions:
+### 4. 获取调仓建议
 ```bash
-# Example: 0.5-Kelly advice based on tracer outputs
+# 基于传导影响获取调仓建议
 docker exec irm irm advisor --impacts '{"QQQM": -61.38, "NVDA": -81.66}' --weights '{"QQQM": 0.35, "NVDA": 0.25}' --fraction 0.5
 ```
-
-## Directory Structure (Inside Container)
-
-- `/app/scripts/ontology/tracer.py`: The graph traversal and impact engine (JSON Rule parsing).
-- `/app/scripts/analyzer/portfolio_viewer.py`: Portfolio auditing and asset allocation viewer.
-- `/app/scripts/analyzer/node_viewer.py`: Graph entity explorer.
-- `/app/scripts/analyzer/portfolio_advisor.py`: Kelly-criterion decision module.
-- `/home/pi-mono/.pi/agent/workspace/.irm/`: Persistent workspace for `SCHEMA.cypher`.
-
-## Risk Management Principles
-
-1. **Correlation is Not Causality**: Use the Knowledge Graph to identify "hidden" common dependencies that simple correlation matrices miss.
-2. **Survival First**: Use fractional Kelly (0.5 or lower) to balance growth with the ability to survive black swan events.
-3. **Non-Linearity Matters**: Pay attention to "amplifiers" when assets are at 90th+ percentile valuations; risk is not a straight line.
