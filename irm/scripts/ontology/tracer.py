@@ -147,14 +147,19 @@ class IRMTracer:
                 gamma = 1.0
                 if n['gamma_sensitive']:
                     # Use the effective VIX (which might include a shock) for Gamma
-                    if current_vix > 30:
+                    if current_vix >= 30:
                         gamma = 1.5 if current_vix <= 45 else 2.5
                 
-                # 3. DYNAMIC State Modifier (mu) - JSON Config Driven!
                 # Routing logic for different modifier metrics
                 metric = n['modifier_metric']
                 if metric == 'source_percentile':
                     reference_percentile = n['source_percentile']
+                    # [Dynamic State Trigger] If the source node is the one being shocked, 
+                    # its static historical percentile is no longer valid. We heuristically simulate 
+                    # an elevated/decreased percentile based on the shock magnitude.
+                    if current_ticker == start_ticker and reference_percentile is not None:
+                        # e.g., +50% delta -> roughly +0.25 to the percentile
+                        reference_percentile = min(0.99, max(0.01, reference_percentile + (args.delta / 200.0)))
                 elif metric == 'target_erp_percentile':
                     reference_percentile = n['target_erp_percentile']
                 elif metric == 'target_pe_percentile':
@@ -222,38 +227,52 @@ if __name__ == "__main__":
          portfolio_assets = list(portfolio.keys())
          
     # 4. Run Trace with automatically determined VIX
-    impacts = tracer.trace_impact(args.ticker, args.delta, current_vix=effective_vix)
+    # Get metadata for the source ticker to handle metric conversion
+    cypher_meta = f"MATCH (n) WHERE COALESCE(n.ticker, n.name) = '{args.ticker}' RETURN n.metric_type, n.value"
+    meta_result = tracer._query_falkor(cypher_meta)
+    
+    source_delta_val = args.delta
+    if meta_result and meta_result.result_set:
+        m_type = meta_result.result_set[0][0]
+        cur_val = meta_result.result_set[0][1]
+        
+        # If source is a rate or volatility, convert the % delta to absolute point change
+        # beta is calculated as (% change in target) per (1 unit change in source)
+        if m_type in ['rate', 'volatility'] and cur_val is not None:
+            # Absolute change = current_value * (percentage_delta / 100)
+            source_delta_val = float(cur_val) * (args.delta / 100.0)
+            print(f"[*] Metric Correction: Converting {args.delta}% relative shock to {round(source_delta_val, 4)} absolute point change (Source: {m_type})")
+
+    impacts = tracer.trace_impact(args.ticker, source_delta_val, current_vix=effective_vix)
     
     # 5. Aggregate Portfolio Summary
     print("\n" + "="*20 + " PORTFOLIO IMPACT SUMMARY " + "="*20)
     
-    # Initialize all portfolio assets to 1.0 multiplier (no change)
-    summary = {asset: 1.0 for asset in portfolio_assets}
+    # We use a 'Max Absolute Impact' approach for parallel paths from the same source event
+    # instead of multiplicative compounding to avoid double-counting correlated risk paths.
+    summary_impacts = {asset: 0.0 for asset in portfolio_assets}
     
     for imp in impacts:
-        if imp['to'] in portfolio_assets:
-            # Multiplicative compounding: convert impact % to a multiplier (e.g., -30% -> 0.7)
-            shock_multiplier = 1.0 + (imp['step_impact'] / 100.0)
-            # Physical limit: Asset price can't drop below zero
-            if shock_multiplier < 0:
-                shock_multiplier = 0.0
-            summary[imp['to']] *= shock_multiplier
-            
-    # Convert final aggregated multipliers back to percentage impacts
-    for asset in portfolio_assets:
-        summary[asset] = (summary[asset] - 1.0) * 100.0
+        target = imp['to']
+        if target in portfolio_assets:
+            current_best = summary_impacts[target]
+            new_val = imp['step_impact']
+            # Take the one with the largest absolute magnitude (most severe impact)
+            if abs(new_val) > abs(current_best):
+                summary_impacts[target] = new_val
     
     total_portfolio_impact = 0.0
     for asset in portfolio_assets:
-        total_imp = summary.get(asset, 0)
+        total_imp = summary_impacts.get(asset, 0)
         weight = portfolio[asset]['weight']
         weighted_imp = total_imp * weight
         total_portfolio_impact += weighted_imp
         
-        color = "\033[91m" if total_imp < 0 else "\033[92m" if total_imp > 0 else "\033[0m"
-        print(f"{asset:<5} | Weight: {weight*100:>5.1f}% | Absolute Impact: {color}{total_imp:>6.2f}%\033[0m | Weighted PNL Contribution: {weighted_imp:>6.2f}%")
+        # Color coding for terminal output
+        color = "\033[91m" if total_imp < -5 else "\033[93m" if total_imp < 0 else "\033[92m" if total_imp > 0 else "\033[0m"
+        print(f"{asset:<5} | Weight: {weight*100:>5.1f}% | Absolute Impact: {color}{total_imp:>7.2f}%\033[0m | Weighted PNL Contribution: {weighted_imp:>7.2f}%")
     
     print("-" * 66)
-    port_color = "\033[91m" if total_portfolio_impact < 0 else "\033[92m" if total_portfolio_impact > 0 else "\033[0m"
-    print(f"ESTIMATED TOTAL PORTFOLIO NAV SHOCK: {port_color}{total_portfolio_impact:>6.2f}%\033[0m")
+    port_color = "\033[91m" if total_portfolio_impact < -5 else "\033[93m" if total_portfolio_impact < 0 else "\033[92m" if total_portfolio_impact > 0 else "\033[0m"
+    print(f"ESTIMATED TOTAL PORTFOLIO NAV SHOCK: {port_color}{total_portfolio_impact:>7.2f}%\033[0m")
     print("=" * 66)
