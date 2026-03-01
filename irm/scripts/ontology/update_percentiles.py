@@ -66,13 +66,13 @@ class PEPercentileUpdater:
             
             if df_metrics.empty:
                 logger.warning(f"No metrics data returned for {ticker}")
-                return None
+                return None, None
             
             # yfinance 的 metrics 返回通常包含 pe_ratio 列
             pe_col = [c for c in df_metrics.columns if 'pe' in c.lower() and 'ratio' in c.lower()]
             if not pe_col:
                 logger.warning(f"PE ratio column not found for {ticker}")
-                return None
+                return None, None
                 
             current_pe = float(df_metrics[pe_col[0]].iloc[-1])
             logger.info(f"Target {ticker} Current P/E: {current_pe:.2f}")

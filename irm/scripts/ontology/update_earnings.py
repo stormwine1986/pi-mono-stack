@@ -65,12 +65,12 @@ class EPSGrowthUpdater:
             
             if df.empty:
                 logger.warning(f"No metrics data returned for {ticker}")
-                return None
+                return None, None
             
             # Use 'earnings_growth' as the primary forward-looking indicator
             if 'earnings_growth' not in df.columns:
                 logger.warning(f"earnings_growth column not found for {ticker}")
-                return None
+                return None, None
                 
             current_growth = float(df['earnings_growth'].iloc[0])
             logger.info(f"Target {ticker} Analyst Forward Earnings Growth: {current_growth:.2%}")

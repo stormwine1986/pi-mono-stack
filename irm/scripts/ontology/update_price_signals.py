@@ -7,6 +7,13 @@ from falkordb import FalkorDB
 from openbb import obb
 import pandas as pd
 import redis
+import sys
+from pathlib import Path
+# Ensure /app is in sys.path so 'scripts' package can be found
+app_root = str(Path(__file__).resolve().parent.parent.parent)
+if app_root not in sys.path:
+    sys.path.append(app_root)
+
 from scripts.analyzer.update_weights import PortfolioWeightUpdater
 
 # 初始化日志

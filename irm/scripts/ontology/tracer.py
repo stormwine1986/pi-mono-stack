@@ -262,6 +262,10 @@ if __name__ == "__main__":
     # instead of multiplicative compounding to avoid double-counting correlated risk paths.
     summary_impacts = {asset: 0.0 for asset in portfolio_assets}
     
+    # [FIX] If the source ticker itself is in the portfolio, it should bear the initial shock
+    if args.ticker in summary_impacts:
+        summary_impacts[args.ticker] = source_delta_val
+    
     for imp in impacts:
         target = imp['to']
         if target in portfolio_assets:
