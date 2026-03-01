@@ -17,11 +17,11 @@
 
 | 分类 | 标签 (Labels) | 业务角色与定义 | 核心技术属性 (Properties) |
 | :--- | :--- | :--- | :--- |
-| **金融资产** | `Asset` | **宏观锚点与流动性标点**。包含 `InterestRate` (利率)、`Currency` (货币/汇率)、`Volatility` (波动率)、`Commodity` (大宗) 等。 | `ticker` (唯一标识), `value` (实时报价), `percentile` (3年历史分位), `metric_type` (rate/price) |
-| **微观标的** | `Asset:Stock` | **具体上市公司/终端资产**。风险传导的叶子节点，也是损益计算的基准。 | 继承 `Asset` 属性，新增 `foreign_revenue_pct` (海外营收占比) 用于汇兑损益推演。 |
+| **宏观基准** | `Asset:Macro` | **宏观锚点与定价源头**。包含 `InterestRate` (利率)、`Currency` (货币/汇率)、`Volatility` (波动率) 等。此类节点不可直接投资，不适用凯利公式参数。 | `ticker` (唯一标识), `value`, `percentile` (水位), `metric_type` |
+| **可交易标的** | `Asset:Investable` | **终端投资资产**。如 `Stock`, `EquityETF`, `Commodity`, `Crypto`。这是组合持仓的实体，承载凯利理论的基本面先验假设。 | 继承 `Asset` 属性，新增 `base_win_rate`, `expected_upside`, `expected_max_dd` (用于凯利计算)。 |
 | **结构聚合** | `Sector` / `Theme` | **行业与主题概念**。用于归拢同质化风险或捕捉特定叙事（如 AI 基础设施）产生的共振。 | `name` (英文标识), `name_cn` (中文定性) |
 | **定价枢纽** | `Hub:Valuation` / `Earnings` | **宏微观翻译器 (Translators)** ★。负责吸收宏观冲击并翻译为资产估值或盈利预期的变动。 | `target` (关联Ticker), `pe_min`/`pe_max` (PE经验带), `eps_min`/`eps_max` (盈利增速带), `percentile` (水位) |
-| **账户终端** | `Portfolio` | **系统决策终点**。代表用户的资金分布与持仓权重，是所有风控建议的下发对象。 | `owner` (所属权), `total_value` (总净值), `currency` (本位币) |
+| **账户终端** | `Portfolio` | **系统决策终点**。代表用户的资金分布与持股逻辑，是所有风控建议下发的锚点。 | `owner` (所属权), `name` (组合名), `total_value` (总净值/NAV), `currency` (本位币) |
 | **虚拟代理** | `Event` | **传导第一推动力**。由 LLM 解析新闻后生成的非持久化实时节点，作为冲击计算的入口。 | `delta_pct` (初始Delta), `event_logic` (事件成因) |
 
 #### 2.1.2 核心传导边 (Edge Types)
@@ -35,7 +35,7 @@
 | `[:PRICES]` | **定价压制** ★ | **核心算力通道**。承载 `base_beta` (基准敏感度) 与 `threshold_config` (非线性阶跃 JSON)。 |
 | `[:DETERMINES]` | **价值决定** | 限定于 `Hub` → `Asset` 方向。承载 $P = PE \times EPS$ 的决定逻辑。 |
 | `[:Structural]` | **结构归属** | 含 `BELONGS_TO`, `COMPOSES`, `TRACKS` 等。携带 `composition_weight` 属性定义成分权重。 |
-| `[:HOLDS]` | **仓位触达** | 承载 `Portfolio` 与资产的持仓明细。含 `weight_pct` (仓位占比), `avg_cost`, `shares`。 |
+| `[:HOLDS]` | **仓位触达** ★ | **实时联动边**。仅承载 `weight_pct` (资产市值占比)。对应的物理账本（`shares` 股数、`avg_cost` 成本）解耦存储在 Redis Hash (`irm:portfolio:{owner}:holdings:{ticker}`) 中。当账本变动时，系统自动重算此边的权重。 |
 
 > [!tip] 图谱更新机制：静态结构与动态权重的分离
 > - **结构层 (低频/静态)**：本体拓扑描述的是金融市场的“逻辑物理法则”（如航司依赖燃油），结构极其稳定，无需高频更新。
@@ -276,10 +276,11 @@ irm/scripts/
 │   ├── update_percentiles.py  # 估值分位更新：自动化拉取 PE 数据并计算拥挤度分位
 │   └── update_earnings.py    # 盈利预期更新：同步底层标的的盈利预测与增速分位
 └── analyzer/
-    ├── portfolio_viewer.py   # 持仓观测舱：聚合组合持仓并实时展成金融仓位表
-    ├── portfolio_advisor.py  # 凯利公式专家组：结合推演损幅与 Bayesian 胜率修正，给出仓位建议
-    ├── config_manager.py     # 分布式配置管理：统一维护 Redis 中的经验区间(Bands)与数据源映射
-    └── node_viewer.py        # 节点探针：快速查询特定 Ticker 在图中的物理属性与分位点
+    ├── portfolio_manager.py  # 账户总管：承载持仓查看 (list)、仓位维护 (update) 与拓扑自动伸缩逻辑。
+    ├── portfolio_advisor.py  # 凯利专家：自动抓取图谱权重，结合实时冲击分值，给出量化调仓建议。
+    ├── update_weights.py     # 权重刷新器：联动 Redis 股数与图谱市价，刷新 [:HOLDS] 边权重。
+    ├── config_manager.py     # 配置中心：管理 Redis 中的数据源映射 (`sources`) 等全局参数。
+    └── node_viewer.py        # 节点探针：快速查询特定 Ticker 在图中的物理属性与分位点。
 ```
 
 ---

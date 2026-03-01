@@ -1,64 +1,93 @@
 import argparse
 import json
+import os
+from urllib.parse import urlparse
+from falkordb import FalkorDB
 
 class KellyAdvisor:
-    def __init__(self, kelly_fraction=0.5):
+    def __init__(self, kelly_fraction=0.5, graph_name="Graph-001"):
         """
         :param kelly_fraction: 0.5 for Half-Kelly, 0.25 for Quarter-Kelly.
                                Essential for long-term investments to avoid ruin.
         """
         self.kelly_fraction = kelly_fraction
+        self.graph_name = graph_name
         
-        # Base long-term assumptions for assets (b = CAGR / Max Drawdown)
-        # Ideally this comes from the database/schema directly. 
-        # Here we mock it for demonstration.
-        # Base long-term assumptions for assets (b = Expected 3-5Yr Upside / Expected Max Drawdown)
-        # In a realistic environment, these come from expert estimates or historical distributions.
-        self.base_assumptions = {
-            "QQQM": {"base_win_rate": 0.70, "upside": 0.40, "max_dd": 0.20},  # b = 2.0
-            "NVDA": {"base_win_rate": 0.65, "upside": 0.80, "max_dd": 0.40},  # b = 2.0
-            "PLTR": {"base_win_rate": 0.60, "upside": 1.20, "max_dd": 0.50},  # b = 2.4
-            "GOLD": {"base_win_rate": 0.60, "upside": 0.20, "max_dd": 0.10},  # b = 2.0
-            "BTC":  {"base_win_rate": 0.55, "upside": 1.50, "max_dd": 0.60},  # b = 2.5
-        }
+        # Assumptions are now stored in ontology graph under :Investable nodes.
 
-    def _calculate_b(self, asset):
-        """Calculate Long-term payoff ratio 'b' (Upside / Max Drawdown)"""
-        assumptions = self.base_assumptions.get(asset, {"base_win_rate": 0.5, "upside": 0.2, "max_dd": 0.2})
-        if assumptions["max_dd"] == 0:
-            return 1.0
-        return assumptions["upside"] / assumptions["max_dd"]
+    def fetch_current_weights(self, owner="Admin"):
+        """Fetch current weights directly from FalkorDB [:HOLDS] edges."""
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        parsed = urlparse(redis_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6379
+        
+        try:
+            db = FalkorDB(host=host, port=port)
+            graph = db.select_graph(self.graph_name)
+            cypher = f"MATCH (p:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(a:Investable) RETURN a.ticker, r.weight_pct"
+            result = graph.query(cypher)
+            
+            weights = {}
+            if result and result.result_set:
+                for row in result.result_set:
+                    weights[row[0]] = float(row[1] or 0.0)
+            return weights
+        except Exception as e:
+            print(f"[!] Warning: Failed to fetch weights from DB: {e}")
+            return {}
 
-    def evaluate_position(self, asset, current_weight, impact_score, penalty_multiplier=0.01):
+    def fetch_assumptions(self, tickers):
+        """Fetch base assumptions for a list of tickers from :Investable nodes."""
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        parsed = urlparse(redis_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6379
+        
+        try:
+            db = FalkorDB(host=host, port=port)
+            graph = db.select_graph(self.graph_name)
+            cypher_list = json.dumps(list(tickers))
+            cypher = f"MATCH (a:Investable) WHERE a.ticker IN {cypher_list} RETURN a.ticker, a.base_win_rate, a.expected_upside, a.expected_max_dd"
+            result = graph.query(cypher)
+            
+            assumptions = {}
+            if result and result.result_set:
+                for row in result.result_set:
+                    assumptions[row[0]] = {
+                        "base_win_rate": float(row[1]) if row[1] is not None else 0.55,
+                        "upside": float(row[2]) if row[2] is not None else 0.30,
+                        "max_dd": float(row[3]) if row[3] is not None else 0.20
+                    }
+            return assumptions
+        except Exception as e:
+            print(f"[!] Warning: Failed to fetch assumptions from DB: {e}")
+            return {}
+
+    def evaluate_position(self, asset, current_weight, impact_score, asset_assumptions):
         """
         Evaluate optimal position size based on ontology impact score.
-        :param asset: Ticker symbol
-        :param current_weight: Current portfolio weight (0.0 to 1.0)
-        :param impact_score: Impact score output from tracer.py (e.g. -19.01 for QQQM)
-        :param penalty_multiplier: How much 1 point of impact score drops the win rate.
         """
-        assumptions = self.base_assumptions.get(asset, {"base_win_rate": 0.5, "upside": 0.2, "max_dd": 0.2})
-        base_p = assumptions["base_win_rate"]
-        b = self._calculate_b(asset)
+        base_p = asset_assumptions.get("base_win_rate", 0.55)
+        upside = asset_assumptions.get("upside", 0.30)
+        max_dd = asset_assumptions.get("max_dd", 0.20)
+        
+        b = upside / max_dd if max_dd > 0 else 1.0
 
         # 1. Update Bayesian Probability based on Impact Score
-        # Impact represents expected NAV shock magnitude. 
-        # Asymmetric adjustment: Negative impacts destroy probability faster than positive impacts build it.
         if impact_score < 0:
             probability_adj = impact_score * 0.005  # e.g., -100% impact -> -0.5 to win rate
         else:
             probability_adj = impact_score * 0.002  # e.g., +100% impact -> +0.2 to win rate
             
-        new_p = max(0.01, min(0.99, base_p + probability_adj)) # bounded between 1% and 99%
+        new_p = max(0.01, min(0.99, base_p + probability_adj)) 
         new_q = 1.0 - new_p
 
-        # 2. Raw Kelly Formula: f* = (bp - q) / b = p - (1-p)/b
+        # 2. Raw Kelly Formula: f* = (bp - q) / b
         raw_kelly = new_p - (new_q / b) if b > 0 else 0
-        
-        # Math constraint: Kelly can be negative (meaning short the asset or hold 0)
         raw_kelly = max(0.0, raw_kelly)
 
-        # 3. Apply Fractional Kelly for survival
+        # 3. Apply Fractional Kelly
         recommended_weight = raw_kelly * self.kelly_fraction
 
         # 4. Generate Actionable Suggestion
@@ -86,42 +115,56 @@ class KellyAdvisor:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRM Kelly Position Advisor")
-    parser.add_argument("--impacts", type=str, required=True, help="JSON string of asset impacts. e.g. '{\"QQQM\": -19.01, \"NVDA\": -8.21}'")
-    parser.add_argument("--weights", type=str, required=True, help="JSON string of current weights. e.g. '{\"QQQM\": 0.35, \"NVDA\": 0.25}'")
-    parser.add_argument("--fraction", type=float, default=0.5, help="Kelly fraction (default 0.5 Half-Kelly)")
+    parser.add_argument("--impacts", type=str, required=True, help="JSON impacts. e.g. '{\"QQQM\": -19.01}'")
+    parser.add_argument("--weights", type=str, help="Optional current weights JSON. If omitted, fetched from DB.")
+    parser.add_argument("--owner", default="Admin", help="Portfolio owner for weight fetching")
+    parser.add_argument("--fraction", type=float, default=0.5, help="Kelly fraction (default 0.5)")
     
     args = parser.parse_args()
     
     try:
         impacts = json.loads(args.impacts)
-        weights = json.loads(args.weights)
     except json.JSONDecodeError as e:
-        print(f"Error parsing JSON inputs: {e}")
+        print(f"Error parsing impacts JSON: {e}")
         exit(1)
         
     advisor = KellyAdvisor(kelly_fraction=args.fraction)
     
+    # Auto-fetch weights if not provided
+    if args.weights:
+        weights = json.loads(args.weights)
+    else:
+        weights = advisor.fetch_current_weights(owner=args.owner)
+        if not weights:
+            print(f"[!] No active holdings found for {args.owner}. Please provide --weights manually.")
+            # We don't exit, just continue with 0 weights if needed
+    
     print("\n" + "="*20 + " KELLY CRITERION POSITION ADVISOR " + "="*20)
-    print(f"Mode: {args.fraction}-Kelly")
-    print("-" * 68)
+    print(f"Mode: {args.fraction}-Kelly | Owner: {args.owner}")
+    print("-" * 75)
     print(f"{'Asset':<6} | {'Impact':<8} | {'WinRate':<7} | {'Curr Wt':<8} | {'Rec Wt':<8} | {'ACTION':<10}")
-    print("-" * 68)
+    print("-" * 75)
     
-    for asset, impact in impacts.items():
-        curr_weight = weights.get(asset, 0)
-        res = advisor.evaluate_position(asset, curr_weight, impact)
-        
-        action_col = "\033[91m" if res['action'] in ['REDUCE', 'LIQUIDATE'] else "\033[92m" if res['action'] == 'ADD' else "\033[0m"
-        
-        # Format the weight display properly
-        curr_w_str = f"{res['current_weight']*100:.1f}%"
-        rec_w_str = f"{res['recommended_weight']*100:.1f}%"
-        
-        print(f"{asset:<6} | {res['impact_score']:>7.2f}% | {res['original_P_win']:>3.2f}->{res['new_P_win']:<4.2f} | {curr_w_str:<8} | {rec_w_str:<8} | {action_col}{res['action']:<10}\033[0m")
-        
-        if res['action'] in ['REDUCE', 'LIQUIDATE']:
-             print(f"  > [Advice] {asset} probability of compounding severely damaged by impact ({res['impact_score']}%). Target size reduced by {-res['suggested_delta']*100:.1f}%.")
-        elif res['action'] == 'ADD':
-             print(f"  > [Advice] {asset} fundamental outlook improved (Impact: +{res['impact_score']}%). Target size increased by {res['suggested_delta']*100:.1f}%.")
+    # Process all assets in impacts, or all assets in weights
+    all_tickers = set(impacts.keys()) | set(weights.keys())
+    db_assumptions = advisor.fetch_assumptions(all_tickers)
     
-    print("=" * 68)
+    for asset in sorted(all_tickers):
+        impact = impacts.get(asset, 0.0) # Default 0 impact if not specified
+        curr_weight = weights.get(asset, 0.0)
+        asset_assumptions = db_assumptions.get(asset, {"base_win_rate": 0.55, "upside": 0.30, "max_dd": 0.20})
+        
+        res = advisor.evaluate_position(asset, curr_weight, impact, asset_assumptions)
+        
+        # Color coding Actions (ANSI codes)
+        color = ""
+        if res['action'] in ['REDUCE', 'LIQUIDATE']: color = "\033[91m"
+        elif res['action'] == 'ADD': color = "\033[92m"
+        reset = "\033[0m"
+        
+        curr_w_str = f"{res['current_weight']*100:>5.1f}%"
+        rec_w_str = f"{res['recommended_weight']*100:>5.1f}%"
+        
+        print(f"{asset:<6} | {res['impact_score']:>7.2f}% | {res['original_P_win']:>3.2f}->{res['new_P_win']:<4.2f} | {curr_w_str:<8} | {rec_w_str:<8} | {color}{res['action']:<10}{reset}")
+    
+    print("=" * 75 + "\n")

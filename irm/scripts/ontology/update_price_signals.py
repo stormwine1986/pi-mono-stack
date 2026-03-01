@@ -7,6 +7,7 @@ from falkordb import FalkorDB
 from openbb import obb
 import pandas as pd
 import redis
+from scripts.analyzer.update_weights import PortfolioWeightUpdater
 
 # 初始化日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -149,6 +150,15 @@ class PriceSignalUpdater:
             if percentile is not None and value is not None:
                 self.update_node_state(ticker, percentile, value)
                 logger.info(f"Successfully updated {ticker} (p={percentile:.4f}, v={value:.4f}) in DB.")
+
+        # 4. Trigger Portfolio weight sync immediately after price update
+        logger.info("Triggering automatic portfolio weight sync...")
+        try:
+            weight_updater = PortfolioWeightUpdater(graph_name=self.graph_name)
+            weight_updater.update_all_portfolios()
+            logger.info("Portfolio weight sync completed successfully.")
+        except Exception as e:
+            logger.error(f"Failed to sync portfolio weights: {e}")
 
 if __name__ == "__main__":
     updater = PriceSignalUpdater()

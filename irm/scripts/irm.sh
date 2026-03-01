@@ -10,12 +10,23 @@ case "$COMMAND" in
     tracer)
         python3 /app/scripts/ontology/tracer.py "$@"
         ;;
-    advisor)
-        python3 /app/scripts/analyzer/portfolio_advisor.py "$@"
-        ;;
+
     portfolio)
-        python3 /app/scripts/analyzer/portfolio_viewer.py "$@"
+        SUBCOMMAND=$1
+        shift
+        case "$SUBCOMMAND" in
+            update)
+                python3 /app/scripts/analyzer/portfolio_manager.py update "$@"
+                ;;
+            advisor)
+                python3 /app/scripts/analyzer/portfolio_advisor.py "$@"
+                ;;
+            list|ls|*)
+                python3 /app/scripts/analyzer/portfolio_manager.py list "$@"
+                ;;
+        esac
         ;;
+
     graph)
         SUBCOMMAND=$1
         shift
@@ -53,8 +64,10 @@ case "$COMMAND" in
         echo ""
         echo "Available Commands:"
         echo "  tracer    - Trace macro-to-micro impact propagation"
-        echo "  advisor   - Get Kelly-based portfolio allocation advice"
-        echo "  portfolio - List asset allocation status for a specified owner"
+        echo "  portfolio list   - List asset allocation status for a specified owner"
+        echo "  portfolio update - Update a specific holding (e.g. irm portfolio update NVDA 300 850)"
+        echo "  portfolio advisor - Get Kelly-based allocation advice (requires impacts/weights)"
+
         echo "  graph     - Graph operations (nodes, edges)"
  
         echo "  backup    - Export live Ontology data and Configs to .irm directory"

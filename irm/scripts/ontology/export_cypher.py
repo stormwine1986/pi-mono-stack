@@ -106,16 +106,19 @@ def export_config(host, port, out_dir):
         
     lines = ["#!/bin/bash", "# Auto-generated Redis Configuration Backup", ""]
     
-    keys_to_export = ["irm:config:pe_bands", "irm:config:eps_bands", "irm:config:sources"]
+    keys_to_export = ["irm:config:sources"]
+    for p_key in r.scan_iter("irm:portfolio:*:holdings:*"):
+        keys_to_export.append(p_key)
+        
     for key in keys_to_export:
         data = r.hgetall(key)
         if not data:
             continue
         lines.append(f"# {key}")
-        lines.append(f"redis-cli DEL \"{key}\" >/dev/null")
+        lines.append(f"redis-cli -h {host} -p {port} DEL \"{key}\" >/dev/null")
         for k, v in data.items():
             safe_v = v.replace("'", "'\\''")  # quote safety
-            lines.append(f"redis-cli HSET \"{key}\" \"{k}\" '{safe_v}' >/dev/null")
+            lines.append(f"redis-cli -h {host} -p {port} HSET \"{key}\" \"{k}\" '{safe_v}' >/dev/null")
         lines.append("")
         
     with open(out_script, "w") as f:

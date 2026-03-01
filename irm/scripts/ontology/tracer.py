@@ -34,20 +34,28 @@ class IRMTracer:
 
     def get_portfolio_assets(self, owner="Admin"):
         """Fetch current portfolio holdings from the graph to make it dynamic."""
-        cypher = f"MATCH (n:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(m) RETURN m.ticker, r.weight_pct, r.shares, r.avg_cost"
+        cypher = f"MATCH (n:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(m) RETURN m.ticker, r.weight_pct"
         result = self._query_falkor(cypher)
         
         portfolio = {}
         if not result or not result.result_set:
             return portfolio
 
+        import redis
+        host = self.db.connection.connection_pool.connection_kwargs.get('host', 'localhost')
+        port = self.db.connection.connection_pool.connection_kwargs.get('port', 6379)
+        r_client = redis.Redis(host=host, port=port, decode_responses=True)
+
         for row in result.result_set:
             try:
                 ticker = row[0]
+                redis_key = f"irm:portfolio:{owner}:holdings:{ticker}"
+                redis_data = r_client.hgetall(redis_key)
+                
                 portfolio[ticker] = {
                     "weight": float(row[1]),
-                    "shares": float(row[2]),
-                    "avg_cost": float(row[3])
+                    "shares": float(redis_data.get('shares', 0.0)),
+                    "avg_cost": float(redis_data.get('avg_cost', 0.0))
                 }
             except (ValueError, IndexError, TypeError):
                 continue

@@ -67,7 +67,8 @@ class IRMNodeViewer:
             "       n.pe_min, n.pe_max, "
             "       n.eps_min, n.eps_max, "
             "       n.pe_percentile, n.erp_percentile, "
-            "       n.name_cn, n.metric_type, n.role, n.market "
+            "       n.name_cn, n.metric_type, n.role, n.market, "
+            "       n.base_win_rate, n.expected_upside, n.expected_max_dd "
             "ORDER BY labels(n)[0], COALESCE(n.ticker, n.target), n.name"
         )
         result = self._query_falkor(cypher)
@@ -96,7 +97,12 @@ class IRMNodeViewer:
         print(sep_line)
         
         for row in result.result_set:
-            labels, node_id, name, value, pct, pe_min, pe_max, eps_min, eps_max, pe_pct, erp_pct, name_cn, m_type, role, market = row
+            labels, node_id, name, value, pct, pe_min, pe_max, eps_min, eps_max, pe_pct, erp_pct, name_cn, m_type, role, market, win_rate, upside, max_dd = row
+            
+            # Use Investable display name if it has the label to shorten Output
+            is_investable = "Investable" in labels
+            if is_investable:
+                labels.remove("Asset") # Show Asset:Stock:Investable as Stock:Investable
             
             display_type = ":".join(labels)[:18]
             display_id = str(node_id)[:8]
@@ -117,8 +123,9 @@ class IRMNodeViewer:
             details = []
             if pe_min is not None: details.append(f"PE:[{pe_min},{pe_max}]")
             if eps_min is not None: details.append(f"EPS:[{eps_min:.1%},{eps_max:.1%}]")
-            if name_cn and labels[0] not in ['Sector', 'Theme']: details.append(f"CN:{name_cn}")
-            if m_type: details.append(f"T:{m_type}")
+            if win_rate is not None: details.append(f"K:[Win:{win_rate:.2f}/Up:{upside:.1f}/DD:{max_dd:.2f}]")
+            if name_cn and labels[0] not in ['Sector', 'Theme'] and not is_investable: details.append(f"CN:{name_cn}")
+            if m_type and not is_investable: details.append(f"T:{m_type}")
             if role: details.append(f"R:{role}")
             if market: details.append(f"M:{market}")
             
