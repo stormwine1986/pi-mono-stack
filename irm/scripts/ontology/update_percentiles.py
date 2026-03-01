@@ -38,8 +38,8 @@ class PEPercentileUpdater:
             return None
 
     def get_valuation_hubs(self):
-        """获取所有 PE 枢纽节点及其自有的经验区间"""
-        cypher = "MATCH (h:Hub:Valuation) RETURN h.target, id(h), h.name, h.pe_min, h.pe_max"
+        """获取所有 PE 枢纽节点及其自有的经验区间和 ERP 状态"""
+        cypher = "MATCH (h:Hub:Valuation) RETURN h.target, id(h), h.name, h.pe_min, h.pe_max, h.erp_percentile"
         result = self.query_falkor(cypher)
         hubs = []
         if not result or not result.result_set:
@@ -51,7 +51,8 @@ class PEPercentileUpdater:
                 "node_id": row[1],
                 "name": row[2],
                 "pe_min": row[3],
-                "pe_max": row[4]
+                "pe_max": row[4],
+                "erp_percentile": row[5]
             })
         return hubs
 
@@ -91,11 +92,11 @@ class PEPercentileUpdater:
             else:
                 percentile = (current_pe - val_min) / (val_max - val_min)
                 
-            return percentile
+            return percentile, current_pe
             
         except Exception as e:
             logger.error(f"Failed to calculate percentile for {ticker}: {e}")
-            return None
+            return None, None
 
     def run(self):
         if not self.graph:
@@ -109,13 +110,26 @@ class PEPercentileUpdater:
             node_id = hub['node_id']
             pe_min = hub['pe_min']
             pe_max = hub['pe_max']
+            erp_pct = hub['erp_percentile']
             
-            percentile = self.calculate_pe_percentile(target, pe_min, pe_max)
+            # 1. 计算原始 PE 分位
+            pe_percentile, current_pe = self.calculate_pe_percentile(target, pe_min, pe_max)
             
-            if percentile is not None:
-                cypher = f"MATCH (h:Hub) WHERE id(h) = {node_id} SET h.percentile = {percentile:.4f}"
+            if pe_percentile is not None:
+                # 2. 引入复合逻辑: percentile = max(pe_percentile, 1.0 - erp_percentile)
+                # erp_percentile 越低，代表性价比越差，压力越大 (1 - erp)
+                erp_pressure = (1.0 - float(erp_pct)) if erp_pct is not None else 0.0
+                composite_percentile = max(pe_percentile, erp_pressure)
+                
+                # 3. 更新节点
+                cypher = (
+                    f"MATCH (h:Hub) WHERE id(h) = {node_id} "
+                    f"SET h.pe_percentile = {pe_percentile:.4f}, "
+                    f"    h.percentile = {composite_percentile:.4f}, "
+                    f"    h.value = {current_pe:.2f}"
+                )
                 self.query_falkor(cypher)
-                logger.info(f"Successfully updated {target} P/E Percentile: {percentile:.4f}")
+                logger.info(f"Updated {target}: PE_Pct={pe_percentile:.4f}, ERP_Pressure={erp_pressure:.4f}, Value={current_pe:.2f} -> Final_Pct={composite_percentile:.4f}")
 
 if __name__ == "__main__":
     updater = PEPercentileUpdater()

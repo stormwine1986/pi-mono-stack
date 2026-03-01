@@ -90,11 +90,11 @@ class EPSGrowthUpdater:
             else:
                 percentile = (current_growth - val_min) / (val_max - val_min)
                 
-            return percentile
+            return percentile, current_growth
             
         except Exception as e:
             logger.error(f"Failed to calculate EPS percentile for {ticker}: {e}")
-            return None
+            return None, None
 
     def run(self):
         if not self.graph:
@@ -110,13 +110,13 @@ class EPSGrowthUpdater:
             eps_min = hub['eps_min']
             eps_max = hub['eps_max']
             
-            percentile = self.calculate_eps_percentile(target, eps_min, eps_max)
+            percentile, current_growth = self.calculate_eps_percentile(target, eps_min, eps_max)
             
             if percentile is not None:
                 # Update the hub node in FalkorDB
-                cypher = f"MATCH (h:Hub) WHERE id(h) = {node_id} SET h.percentile = {percentile:.4f}"
+                cypher = f"MATCH (h:Hub) WHERE id(h) = {node_id} SET h.percentile = {percentile:.4f}, h.value = {current_growth:.4f}"
                 self.query_falkor(cypher)
-                logger.info(f"Successfully updated {target} EPS Percentile: {percentile:.4f}")
+                logger.info(f"Successfully updated {target} EPS Percentile: {percentile:.4f} (Growth: {current_growth:.4f})")
 
 if __name__ == "__main__":
     updater = EPSGrowthUpdater()

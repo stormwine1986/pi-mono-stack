@@ -313,123 +313,69 @@ irm/scripts/
 
 ---
 
-### 4.5 P/E 百分位自动化更新管道 (PE Percentile Pipeline)
+### 4.4 核心边引擎机制 (JSON Payload Schema)
 
-该管道旨在自动执行从外部金融市场（OpenBB）拉取实时市盈率（P/E），并根据配置的经验带（Bands）计算资产估位（Percentile），最后将计算结果持久化到 FalkorDB 本体图谱中，以驱动风控引擎的动态传导。
+可以通过编写一个 Python 字典（或 JSON Schema）来优雅地结构化这种多维度边：
 
-#### 1. 架构概览
-
-系统采用 **“配置与逻辑分离”** 的设计模式，主要由三部分组成：分布式配置中心（Redis）、数据采集执行器（Python/OpenBB）和本体知识图谱（FalkorDB）。
-
-```mermaid
-graph TD
-    subgraph "External"
-        OpenBB[OpenBB SDK / yfinance]
-    end
-
-    subgraph "IRM Container"
-        CLI[IRM CLI / irm.sh]
-        ValUpdate[update_percentiles.py]
-        EarnUpdate[update_earnings.py]
-    end
-
-    subgraph "Infrastructures"
-        FalkorDB[(FalkorDB - Ontology Chart)]
-    end
-
-    CLI -->|pe/eps-bands update| FalkorDB
-    ValUpdate -->|Read Bands| FalkorDB
-    ValUpdate -->|Fetch PE| OpenBB
-    ValUpdate -->|Update Hub:Valuation| FalkorDB
-    EarnUpdate -->|Read Bands| FalkorDB
-    EarnUpdate -->|Fetch EPS Growth| OpenBB
-    EarnUpdate -->|Update Hub:Earnings| FalkorDB
+```json
+// edges_config 示例 (映射为 Cypher 定义)
+{
+  "source": "US10Y",
+  "target": "PE_NVDA",
+  "edge_attributes": {
+    "id": "Vy_777P_YmE9V7VG76u5f",
+    "base_beta": -1.8,
+    "modifier_metric": "target_percentile",  // 引擎指令：主动去读取 target(PE_NVDA) 节点的 percentile 属性 (或填 source_percentile 读起源节点水位)
+    "state_trigger": "percentile_amplifier", // 保留作为语义化标签，用于 LLM 投顾解说与前端可视化染色
+    "threshold_config": [                    // 引擎实际执行的“纯数字化规则”
+      {"min": 0.95, "max": 1.0, "mu": 4.0},  // 极值崩塌区 (>=95%)：触发 4倍 放大
+      {"min": 0.85, "max": 0.95, "mu": 2.0}, // 风险预警区 (85%~95%)：触发 2倍 放大
+      {"min": 0.0,  "max": 0.85, "mu": 1.0}  // 常规区间 (<85%)：常态线性传导
+    ],
+    "gamma_sensitive": true,                 // 是否受全局恐慌情绪(VIX)加持
+    "logic": "极高贴现率重创超高估值AI远期现金流"
+  }
+}
 ```
-
-#### 2. 核心组件说明
-
-*   **执行层 (update_percentiles.py / update_earnings.py)**：
-    1.  **扫描图谱**：查询所有 `(h:Hub)` 节点及其自带的 `min/max` 经验区间。
-    2.  **拉取数据**：调用 `openbb` 获取 `pe_ratio` 或 `earnings_growth`。
-    3.  **水位映射**：直接依据节点内部的 `pe_min/max` 或 `eps_min/max` 属性，将实时指标映射为 **0.0 - 1.0** 的分位水位（Percentile）。
-    4.  **写回图谱**：更新 `Hub` 节点的 `percentile` 属性。
-*   **管理层 (IRM CLI)**：
-    *   `irm pe-bands update <ticker> <min> <max>` (直接修改图节点属性)
-    *   `irm eps-bands update <ticker> <min> <max>`
 
 ---
 
-### 4.6 全局价格信号自动化配置与同步管道 (Price Signals Pipeline)
+## 5. 三位一体周期性自动化管道 (The Trinity Update Pipelines)
 
-该管道旨在提取“客观的市场状态（例如美元处于历史极高位、标普100的实时价格等）”，并将其作为 `percentile` 属性或其他动态指标更新至本体图谱。
+为了维持本体图谱的“实时生命力”，系统设计了三个独立运行的 Python 数据管道（Cron Jobs），负责将外部物理世界的变动同步到图谱的属性中。
 
-#### 1. 架构概览
+### 5.1 管道功能矩阵 (Pipeline Matrix)
 
-数据源同步管道遵循“配置（由终端设定）与执行（由算力完成）彻底代码级分离”的理念。它承载了全系统所有逻辑资产（Ticker）到物理交易所代码（Symbol）的映射关系。
+| 管道脚本 | 核心职责 | 更新目标 (Nodes) | 具体更新属性 (Properties) |
+| :--- | :--- | :--- | :--- |
+| **`update_price_signals.py`** | **市场现状同步** | 所有 `Asset` 及其子类 | `value` (最新价/利率), `percentile` (基于3年历史数据的价格位置分位) |
+| **`update_percentiles.py`** | **估值压力更新** | `Hub:Valuation` | `value` (当前 PE 数值), `pe_percentile` (PE 线性映射), `percentile` (综合复合水位) |
+| **`update_earnings.py`** | **增长预期同步** | `Hub:Earnings` | `value` (远期 EPS 增长率数值), `percentile` (增长率线性映射) |
 
-```mermaid
-graph TD
-    subgraph "External Providers"
-        YFinance[Yahoo Finance]
-        FRED[Federal Reserve Economic Data]
-    end
+### 5.2 核心算法增强：复合风险水位 (Composite Percentile Logic)
 
-    subgraph "IRM Container"
-        CLI[IRM CLI / irm.sh]
-        ConfigMgr[config_manager.py]
-        MacroUpdater[update_price_signals.py]
-    end
+在 `Hub:Valuation` 节点中，系统不再单纯依赖 PE 分位，而是引入了**复合估值压力逻辑**。这一改进确保了当估值倍数回落但由于利率飙升导致性价比丧失时，风险水位依然能保持在高位警示状态。
 
-    subgraph "Infrastructures"
-        Redis[(Redis - Config Store)]
-        FalkorDB[(FalkorDB - Ontology Chart)]
-    end
+*   **计算公式**：
+    $$percentile = \max(pe\_percentile, \quad 1.0 - erp\_percentile)$$
+*   **业务含义**：`percentile` 成为一个“风险开关”，无论是因为**“价格太贵” (PE)** 还是 **“相对于美债的性价比太低” (1-ERP)**，只要有一个条件满足，该资产在推演路径上就处于“极度脆弱”状态，触发非线性 Beta 放大。
 
-    CLI -->|sources ls/update| ConfigMgr
-    ConfigMgr -->|HSET/HGETALL| Redis
-    MacroUpdater -->|Read Config| Redis
-    MacroUpdater -->|Fetch 3Y TimeSeries| YFinance
-    MacroUpdater -->|Fetch 3Y TimeSeries| FRED
-    MacroUpdater -->|Calculate rank(pct=True)| MacroUpdater
-    MacroUpdater -->|Update Value & Percentile| FalkorDB
-```
+### 5.3 数据同步规则
 
-#### 2. 核心组件说明
+1.  **物理值回写 (Value Sync)**：所有管道现在不仅更新分位（0.0-1.0），还会将真实的物理值（PE 倍数、增长率百分比、股价）回写到节点的 `value` 属性，供 `node_viewer` 实时查看。
+2.  **网络弹性设计**：管道内置错误捕获机制。若因网络波动（如 TLS 握手失败）导致某个 Ticker 更新失败，系统会保留上一版本数据并记录日志，在下一个计划周期重新尝试，确保图谱数据的连续性。
 
-*   **配置层 (Redis `irm:config:sources`)**：
-    存储所有纳管资产的拉取凭证信息（如 `{"US10Y": {"symbol": "^TNX", "provider": "yfinance"}}`）。
-*   **执行层 (update_price_signals.py)**：
-    1.  **拉取历史序列**：通过 OpenBB 向供应商拉取 3 年历史数据。
-    2.  **计算水位 (Percentile)**：应用 `rank(pct=True)` 提取分位数。
-    3.  **提取物理值 (Value)**：保留资产的最新报价数据（如 VIX 报价 15.3 或 BTC 价格）。
-    4.  **更新图谱**：同步设置 `Asset` 节点的 `percentile` 和 `value` 属性。
-*   **管理层 (IRM CLI)**：
-    *   `irm sources ls`：查看当前纳管的所有标的与代码映射。
-    *   `irm sources update <ticker> <symbol> <provider>`：动态修改或新增标的映射。
-
----
-
-### 4.7 自动化 Beta 提取与回归演进管道 (Beta Calculation Pipeline)
+### 5.4 自动化 Beta 提取与回归演进 (Knowledge Discovery)
 
 该管道是系统“自适应能力”的核心，负责定期通过真实市场交易数据提取资产间的线性敏感度（$\beta$）。
 
-#### 1. 业务逻辑
-系统拒绝使用静态硬编码的 Beta，而是通过历史回归得出结论。
-*   **回归区间**：拉取过去 3 年 (156 周) 的数据。
-*   **采样频率**：自动降采样为 **周线 (Weekly)**，以过滤日内噪音，捕捉价值中枢的真实联动。
-
-#### 2. 数学范式对齐 (`metric_type`)
-根据本体图节点上定义的 `metric_type` 自动切换回归算法：
-*   **Rate 类回归**：源节点为 `rate` 时，计算 `diff()` (基点变动) 进行 OLS。
-*   **Price 类回归**：源节点为 `price` 时，计算 `pct_change()` (收益率) 进行 OLS。
-
-#### 3. 统计学显著性防御
-脚本 (`calc_betas.py`) 在回写前强制检查 **P-Value**。只有 $P < 0.1$ 的联动路径才会被更新至图谱，否则判定为“伪相关”，保留专家定义的常识先验值。
+*   **业务逻辑**：脚本 `calc_betas.py` 通过拉取过去 3 年循环的数据，自动降采样为 **周线 (Weekly)**，通过 OLS 回归捕捉价值中枢的真实联动。
+*   **数学范式对称**：根据节点 `metric_type` 自动切换：`Rate` 类型计算基点变动（diff），`Price` 类型计算收益率（pct_change）。
+*   **统计学显著性防御**：只有 $P < 0.1$ 的显著路径才会被自动更新至图谱，否则视为噪声，保留专家先验值。
 
 ---
 
-
-## 5. 系统部署与容器拓扑 (System Deployment & Topology)
+## 6. 系统部署与容器拓扑 (System Deployment & Topology)
 
 IRM 模块采用高度解耦的微服务/容器化设计，以确保计算引擎与数据存储的独立扩展性。
 
