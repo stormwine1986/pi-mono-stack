@@ -48,7 +48,9 @@ class IRMTracer:
 
         for row in result.result_set:
             try:
-                ticker = row[0]
+                ticker = (row[0] or "").strip().upper()
+                if not ticker: continue
+                
                 redis_key = f"irm:portfolio:{owner}:holdings:{ticker}"
                 redis_data = r_client.hgetall(redis_key)
                 
@@ -78,7 +80,7 @@ class IRMTracer:
         for row in result.result_set:
             try:
                 neighbors.append({
-                    "ticker": row[0],
+                    "ticker": (row[0] or "").strip().upper(),
                     "rel_type": row[1],
                     "base_beta": float(row[2]) if row[2] is not None else 1.0,
                     "gamma_sensitive": str(row[3]).lower() == 'true',
@@ -260,15 +262,16 @@ if __name__ == "__main__":
     
     # We use a 'Max Absolute Impact' approach for parallel paths from the same source event
     # instead of multiplicative compounding to avoid double-counting correlated risk paths.
-    summary_impacts = {asset: 0.0 for asset in portfolio_assets}
+    summary_impacts = {asset.upper(): 0.0 for asset in portfolio_assets}
     
-    # [FIX] If the source ticker itself is in the portfolio, it should bear the initial shock
-    if args.ticker in summary_impacts:
-        summary_impacts[args.ticker] = source_delta_val
+    # [FIX] Normalize source ticker check
+    source_ticker_upper = args.ticker.strip().upper()
+    if source_ticker_upper in summary_impacts:
+        summary_impacts[source_ticker_upper] = source_delta_val
     
     for imp in impacts:
-        target = imp['to']
-        if target in portfolio_assets:
+        target = (imp['to'] or "").strip().upper()
+        if target in summary_impacts:
             current_best = summary_impacts[target]
             new_val = imp['step_impact']
             # Take the one with the largest absolute magnitude (most severe impact)
