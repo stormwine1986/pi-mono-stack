@@ -33,14 +33,8 @@ case "$COMMAND" in
         esac
         ;;
 
-    pe-bands)
-        python3 /app/scripts/analyzer/config_manager.py pe-bands "$@"
-        ;;
     sources)
         python3 /app/scripts/analyzer/config_manager.py sources "$@"
-        ;;
-    eps-bands)
-        python3 /app/scripts/analyzer/config_manager.py eps-bands "$@"
         ;;
     backup)
         python3 /app/scripts/ontology/export_cypher.py "$@"
@@ -62,11 +56,9 @@ case "$COMMAND" in
         echo "  advisor   - Get Kelly-based portfolio allocation advice"
         echo "  portfolio - List asset allocation status for a specified owner"
         echo "  graph     - Graph operations (nodes, edges)"
-
+ 
         echo "  backup    - Export live Ontology data and Configs to .irm directory"
         echo "  store     - Restore data and configs from EXPORTED backups in .irm"
-        echo "  pe-bands  - Manage PE bands configuration (ls, update)"
-        echo "  eps-bands - Manage EPS growth bands configuration (ls, update)"
         echo "  sources   - Manage data sources configuration (ls, update)"
         echo ""
         echo "Use 'irm <command> --help' for more information on a specific command."
