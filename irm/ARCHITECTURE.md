@@ -118,9 +118,14 @@
 
 ### 3.1 核心属性定义层 (Edge Parameters)
 
-我们可以在图谱的每一条边上，定义三个核心属性：
+我们可以在图谱的每一条边上，定义四个核心属性：
 
-#### 3.1.1 Base Beta (基准敏感度 $\beta$) (基准敏感度 $\beta$)
+#### 3.1.0 Edge ID (唯一标识符)
+*   **物理意义**：图谱中每一条边的唯一 ID。
+*   **取值规则**：使用 nanoID 生成（21位随机字符串）。
+*   **作用**：用于精确定位、修改或删除特定的业务逻辑边，避免在多跳网状结构中产生歧义。
+
+#### 3.1.1 Base Beta (基准敏感度 $\beta$)
 *   **物理意义**：历史常态下的线性传导系数。代表 A 每变动 1%，B 预期会如何变动。
 *   **计算来源**：长期（如 1 年至 3 年）的 Pearson 相关系数或回归斜率。
 *   **示例**：
@@ -286,6 +291,7 @@ irm/scripts/
   "source": "US10Y",
   "target": "PE_NVDA",
   "edge_attributes": {
+    "id": "Vy_777P_YmE9V7VG76u5f",
     "base_beta": -1.8,
     "modifier_metric": "target_percentile",  // 引擎指令：主动去读取 target(PE_NVDA) 节点的 percentile 属性 (或填 source_percentile 读起源节点水位)
     "state_trigger": "percentile_amplifier", // 保留作为语义化标签，用于 LLM 投顾解说与前端可视化染色
@@ -489,6 +495,7 @@ IRM 系统的投顾和凯利公式重分配目标。
 ### 2. 传导计算核心属性 (Engine Execution Properties)
 这些属性直接决定引擎 `tracer.py` 如何利用距离衰减公式计算最终冲击。
 
+*   `id` *(String, 必填)*: **唯一标识符**。取值 nanoID (例如 'Vy_777P_YmE9V7VG76u5f')。
 *   `base_beta` *(Float)*: **基准线性敏感度**。表示常态盘整期下，源头节点每变动 1%，目标节点理论上的变动幅面（如 `-1.8`，代表反向放大）。
 *   `gamma_sensitive` *(Boolean)*: **恐慌共振开关**。如果为 `true`，代表此路径在 VIX 飙升等全局恐慌时期极容易发生踩踏出逃，引擎将叠加全局 Gamma 加速器。
 *   `threshold_config` *(String/JSON Array)*: **非线性阶跃/阻断配置**。引擎计算的核心数据驱动层。形如 `[{"min": 0.95, "max": 1.0, "mu": 4.0}, ...]`，引擎会扫描目标节点的当前客观水位并赋予暴风乘数 (mu) 或过滤乘数。

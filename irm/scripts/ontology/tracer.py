@@ -59,7 +59,7 @@ class IRMTracer:
             f"MATCH (n)-[r]->(m) WHERE COALESCE(n.ticker, n.name) = '{ticker}' "
             f"RETURN COALESCE(m.ticker, m.name), type(r), r.base_beta, r.gamma_sensitive, "
             f"r.state_trigger, labels(m)[0], m.percentile, r.modifier_metric, r.threshold_config, n.percentile, "
-            f"m.pe_percentile, m.erp_percentile"
+            f"m.pe_percentile, m.erp_percentile, r.id"
         )
         result = self._query_falkor(cypher)
         
@@ -81,7 +81,8 @@ class IRMTracer:
                     "threshold_config": row[8] if len(row) > 8 else None,
                     "source_percentile": float(row[9]) if (len(row) > 9 and row[9] is not None) else None,
                     "target_pe_percentile": float(row[10]) if (len(row) > 10 and row[10] is not None) else None,
-                    "target_erp_percentile": float(row[11]) if (len(row) > 11 and row[11] is not None) else None
+                    "target_erp_percentile": float(row[11]) if (len(row) > 11 and row[11] is not None) else None,
+                    "id": row[12] if len(row) > 12 else None
                 })
             except (ValueError, IndexError, TypeError):
                 continue
@@ -184,14 +185,15 @@ class IRMTracer:
                     "step_impact": round(impact, 4),
                     "depth": depth + 1,
                     "path": new_path_str,
-                    "logic": f"Beta:{beta} * Mu:{mu} * Gamma:{gamma} * Decay:{round(d_factor,2)}"
+                    "logic": f"Beta:{beta} * Mu:{mu} * Gamma:{gamma} * Decay:{round(d_factor,2)}",
+                    "edge_id": n.get('id')
                 }
                 results.append(path_info)
                 
                 
                 # Fetch target node name for better printing if available, else just ticker
                 target_name = target if target else "Unnamed Node"
-                print(f"[{depth+1}] {new_path_str} ({n['rel_type']}): {round(impact, 4)}%  ({n['label']})")
+                print(f"[{depth+1}] {new_path_str} ({n['rel_type']} ID:{n.get('id')}): {round(impact, 4)}%  ({n['label']})")
 
                 # Continue traversal if impact is still significant
                 if abs(impact) > 0.05:
