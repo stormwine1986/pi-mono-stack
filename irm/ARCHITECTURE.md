@@ -560,8 +560,8 @@ graph LR
 *   **全量构建与启动**：
     ```bash
     # 在项目根目录下执行，自动完成镜像构建与容器编排
-    stack-ctl build irm
-    stack-ctl up irm
+    ./stack-ctl.sh build irm
+    ./stack-ctl.sh up irm
     ```
 *   **状态同步与热重载**：
     如果仅修改了脚本内容而无需重构镜像，可利用 `docker cp` 将代码推送到正在运行的容器中，或通过 `stack-ctl` 触发配置滚动更新。

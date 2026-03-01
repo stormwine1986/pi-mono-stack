@@ -16,8 +16,21 @@ case "$COMMAND" in
     portfolio)
         python3 /app/scripts/analyzer/portfolio_viewer.py "$@"
         ;;
-    nodes)
-        python3 /app/scripts/analyzer/node_viewer.py "$@"
+    graph)
+        SUBCOMMAND=$1
+        shift
+        case "$SUBCOMMAND" in
+            nodes)
+                python3 /app/scripts/analyzer/node_viewer.py "$@"
+                ;;
+            edges)
+                python3 /app/scripts/analyzer/edge_viewer.py "$@"
+                ;;
+            *)
+                echo "Unknown graph command: $SUBCOMMAND"
+                echo "Usage: irm graph {nodes|edges}"
+                ;;
+        esac
         ;;
 
     pe-bands)
@@ -48,7 +61,7 @@ case "$COMMAND" in
         echo "  tracer    - Trace macro-to-micro impact propagation"
         echo "  advisor   - Get Kelly-based portfolio allocation advice"
         echo "  portfolio - List asset allocation status for a specified owner"
-        echo "  nodes     - List all entities in the graph (excluding portfolios)"
+        echo "  graph     - Graph operations (nodes, edges)"
 
         echo "  backup    - Export live Ontology data and Configs to .irm directory"
         echo "  store     - Restore data and configs from EXPORTED backups in .irm"

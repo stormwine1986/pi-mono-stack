@@ -43,16 +43,28 @@ docker exec irm irm sources update <ticker> <symbol> <provider>
 docker exec irm irm tracer --ticker "US10Y" --delta 0.5 --owner Admin
 ```
 
-### 3. 探索与审计
+### 3. 图谱探索与审计
 ```bash
-# 查看图谱节点状态
-docker exec irm irm nodes
+# 查看图谱节点状态 (实体、枢纽、分位点)
+docker exec irm irm graph nodes
+
+# 查看图谱边参数 (Beta、ID、非线性配置)
+docker exec irm irm graph edges
 
 # 查看持仓组合详情
 docker exec irm irm portfolio --owner Admin
 ```
 
-### 4. 获取调仓建议
+### 4. 数据备份与同步
+```bash
+# 执行全量数据与配置恢复 (从 .irm 目录下的 EXPORTED 文件载入)
+docker exec irm irm restore
+
+# 备份当前图谱数据与配置
+docker exec irm irm backup
+```
+
+### 5. 获取调仓建议
 ```bash
 # 基于传导影响获取调仓建议
 docker exec irm irm advisor --impacts '{"QQQM": -61.38, "NVDA": -81.66}' --weights '{"QQQM": 0.35, "NVDA": 0.25}' --fraction 0.5
