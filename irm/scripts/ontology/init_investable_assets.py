@@ -28,12 +28,30 @@ SET a.base_win_rate = 0.55,
 
 print("3. Overriding specific high-conviction assets with custom assumptions...")
 assumptions = {
-    "QQQM": {"base_win_rate": 0.70, "upside": 0.40, "max_dd": 0.20},  # b = 2.0
-    "NVDA": {"base_win_rate": 0.65, "upside": 0.80, "max_dd": 0.40},  # b = 2.0
-    "PLTR": {"base_win_rate": 0.60, "upside": 1.20, "max_dd": 0.50},  # b = 2.4
-    "GOLD": {"base_win_rate": 0.60, "upside": 0.20, "max_dd": 0.10},  # b = 2.0
-    "BTC":  {"base_win_rate": 0.55, "upside": 1.50, "max_dd": 0.60},  # b = 2.5
-    "BBJP": {"base_win_rate": 0.60, "upside": 0.30, "max_dd": 0.20},  # b = 1.5
+    # 纳指/宽基 ETF: 胜率降至更可持续的水平，1:1 的赔率比符合宽基特征。
+    "QQQM": {"base_win_rate": 0.58, "upside": 0.25, "max_dd": 0.25}, 
+    "VGK":  {"base_win_rate": 0.58, "upside": 0.25, "max_dd": 0.25},
+    "BBJP": {"base_win_rate": 0.58, "upside": 0.25, "max_dd": 0.25},
+
+    # 权重科技股: 相比 ETF，个股需增加回撤预期至 30% 以应对中期调整。
+    "AAPL": {"base_win_rate": 0.56, "upside": 0.30, "max_dd": 0.30},
+    "GOOGL":{"base_win_rate": 0.56, "upside": 0.30, "max_dd": 0.30},
+
+    # 高弹性增长股: 调低胜率，利用高赔率取胜。DD 设为 0.5 是防范戴维斯双杀。
+    "NVDA": {"base_win_rate": 0.54, "upside": 0.80, "max_dd": 0.50},
+    "PLTR": {"base_win_rate": 0.54, "upside": 0.80, "max_dd": 0.50},
+
+    # 加密货币: 极高的非对称性。DD 设为 0.75 是为了模拟减半周期中的极限回撤。
+    "BTC":  {"base_win_rate": 0.52, "upside": 1.50, "max_dd": 0.75},
+
+    # 大宗商品/避险: 保持低波动特征，DD 设为 0.15 比较符合黄金的历史表现。
+    "GOLD": {"base_win_rate": 0.55, "upside": 0.20, "max_dd": 0.15},
+
+    # 周期性商品: 原油波动极不稳定，建议降低胜率并调高回撤容忍度。
+    "UKOIL":{"base_win_rate": 0.52, "upside": 0.40, "max_dd": 0.35},
+
+    # 防御性公用事业: 胜率最高，但 Up 设低。适合作为底仓，赔率比控制在 1:1。
+    "UTES": {"base_win_rate": 0.60, "upside": 0.15, "max_dd": 0.15},
 }
 
 for ticker, data in assumptions.items():
