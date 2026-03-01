@@ -9,35 +9,38 @@
 
 ## 2. 核心架构：三层架构模型
 
-### 2.1 知识图谱层 (本体定义)
-本体层定义了市场运行的“物理法则”与基本盘。
-*   **节点 (Nodes - 实体与业务角色定义)**
-    *   `InterestRate` (利率基准)：市场的“资本成本”锚点。决定了全球折现率的基础，是导致科技股和长久期资产杀估值的核心源头。
-    *   `Currency` (货币与流动性)：市场的“购买力与风向标”。美元指数（DXY）反映全球美元流动性紧缩程度，日元等避险/套息货币则反映资本流向。
-    *   `Volatility` (风险脉搏)：市场的“恐惧体温计”。VIX（股市）和 MOVE（债市）不直接产生价值，但决定了风险传递的放大倍数（Gamma效应）。
-    *   `Commodity` (大宗商品)：实体经济的“成本项与避险端”。原油代表通胀压力，黄金代表对法币信用的对冲。
-    *   `Sector` / `Theme` (行业与主题)：市场的“聚合层”。用于识别系统性行业风险或由特定叙事（如AI）引发的共振。
-    *   `EquityETF` / `Stock` / `Crypto` (资产终端)：风险传导的“叶子节点”。这是所有计算最终落地的地方，也是计算损益和调整仓位的基本单位。
-    *   `Hub` (基本面定价枢纽)：充当“宏微观翻译器” (Macro-to-Micro Translators)。
-        *   `PE` (市盈率/估值倍数枢纽)：流动性与风险的天然接收器。负责吸收美国10年期国债收益率（贴现率）和 VIX（风险溢价）的变动。引入 **ERP (股权风险溢价)** 作为核心感知维度，衡量资产相对于无风险利率的安全边际。
-        *   `EPS` (每股收益/盈利预期枢纽)：实体经济与商业周期的传导接收器。吸收美元指数（汇兑利润）、大宗商品（成本）以及产业主题（海量订单）带来的冲击，转化为资产实际盈利基准的上调或下调。
-    *   `Portfolio` (个人账户)：系统的“终局终端”。代表用户的资金分部、平均成本和当前持仓权重，是所有风控建议的目标。
-*   **虚拟代理 (Virtual Proxy)**
-    *   `Event` (扰动源)：传导链条的“第一推动力”。它不是图中的持久化物理节点，而是由微观或宏观新闻触发，通过 LLM 解析为虚拟节点后，对图谱内的目标物理节点发起一阶冲击的计算入口点。
-*   **边 (Edges - 关系与业务传导含义)**
-    *   `DRIVES` (宏观驱动)：描绘金融市场的“第一推动力”（如：油价驱动通胀预期，推高美债收益率信号）。
-    *   `SPILLS_TO` (风险溢出)：描述由于市场脆弱性或恐慌导致的跨界传染（如：债市剧震引爆股市 VIX 飙升）。
-    *   `PRICES` (定价压制)：宏观或风险因子对定价枢纽（PE/EPS）或具体标的的直接冲击测试路径（携带核心 `base_beta` 与修饰器 `state_trigger`）。
-    *   `DETERMINES` (价值决定)：枢纽（Hubs）到底层资产的决定路径。基于基础定价公式 $P=EPS \times PE$，将枢纽的变动翻译为最终资产层面的价格浮动预期。
-    *   `BELONGS_TO` / `HEAVILY_EXPOSED_TO` / `TRACKS` (结构归属)：定义资产在物理结构上（行业、指数成分）的静态暴露量。
-    *   `DRIVES_THEME` / `PARTICIPATES_IN` (主题叙事)：超越传统行业划分的逻辑共振点（如：AI 主题叙事对相关软硬件的同步推升）。
-    *   `CORRELATES_WITH` / `COMPOSES` (相关性补充)：统计学意义上的强联动补丁，用于捕捉无法用因果律直接解释但高度一致的市场行为。
-    *   `HOLDS` (持仓触达)：系统决策的终端，将所有传导分值最终映射到用户账户持仓上，驱动凯利公式建议。
+### 2.1 知识图谱层 (本体定义与技术规范)
+
+本体层定义了市场运行的“物理法则”与基本盘。设计上遵循**“逻辑与物理分离 (Logic-Physical Decoupling)”**的原则：节点仅存储客观事实（价格、水位、元数据），而复杂的传导规律、非线性阶跃阈值则通过“边”上的配置属性承载。
+
+#### 2.1.1 核心实体节点 (Node Types)
+
+| 分类 | 标签 (Labels) | 业务角色与定义 | 核心技术属性 (Properties) |
+| :--- | :--- | :--- | :--- |
+| **金融资产** | `Asset` | **宏观锚点与流动性标点**。包含 `InterestRate` (利率)、`Currency` (货币/汇率)、`Volatility` (波动率)、`Commodity` (大宗) 等。 | `ticker` (唯一标识), `value` (实时报价), `percentile` (3年历史分位), `metric_type` (rate/price) |
+| **微观标的** | `Asset:Stock` | **具体上市公司/终端资产**。风险传导的叶子节点，也是损益计算的基准。 | 继承 `Asset` 属性，新增 `foreign_revenue_pct` (海外营收占比) 用于汇兑损益推演。 |
+| **结构聚合** | `Sector` / `Theme` | **行业与主题概念**。用于归拢同质化风险或捕捉特定叙事（如 AI 基础设施）产生的共振。 | `name` (英文标识), `name_cn` (中文定性) |
+| **定价枢纽** | `Hub:Valuation` / `Earnings` | **宏微观翻译器 (Translators)** ★。负责吸收宏观冲击并翻译为资产估值或盈利预期的变动。 | `target` (关联Ticker), `pe_min`/`pe_max` (PE经验带), `eps_min`/`eps_max` (盈利增速带), `percentile` (水位) |
+| **账户终端** | `Portfolio` | **系统决策终点**。代表用户的资金分布与持仓权重，是所有风控建议的下发对象。 | `owner` (所属权), `total_value` (总净值), `currency` (本位币) |
+| **虚拟代理** | `Event` | **传导第一推动力**。由 LLM 解析新闻后生成的非持久化实时节点，作为冲击计算的入口。 | `delta_pct` (初始Delta), `event_logic` (事件成因) |
+
+#### 2.1.2 核心传导边 (Edge Types)
+
+图谱中所有的边均包含 `id` (nanoID 唯一标识) 和 `logic` (业务逻辑描述，供 LLM 提取并生成诊断报告)。
+
+| 关系类型 | 业务语义 | 核心属性与计算逻辑 |
+| :--- | :--- | :--- |
+| `[:DRIVES]` | **宏观驱动** | 描绘因果链条（如：油价推高通胀预期）。 |
+| `[:SPILLS_TO]` | **风险溢出** | 描述跨市场恐慌传染（如：债市震荡引发股市 VIX 飙升）。 |
+| `[:PRICES]` | **定价压制** ★ | **核心算力通道**。承载 `base_beta` (基准敏感度) 与 `threshold_config` (非线性阶跃 JSON)。 |
+| `[:DETERMINES]` | **价值决定** | 限定于 `Hub` → `Asset` 方向。承载 $P = PE \times EPS$ 的决定逻辑。 |
+| `[:Structural]` | **结构归属** | 含 `BELONGS_TO`, `COMPOSES`, `TRACKS` 等。携带 `composition_weight` 属性定义成分权重。 |
+| `[:HOLDS]` | **仓位触达** | 承载 `Portfolio` 与资产的持仓明细。含 `weight_pct` (仓位占比), `avg_cost`, `shares`。 |
 
 > [!tip] 图谱更新机制：静态结构与动态权重的分离
-> 图的结构（Topology）不需要高频实时更新，但图的权重（Weights）和节点状态（State）需要阶段性或实时更新。
-> - **结构层 (低频/静态)**：描述实体的物理属性与归属（如 Airlines 依赖 Oil），这是市场的“常识”层，结构非常稳定。
-> - **状态与参数层 (中高频/动态)**：描述传导的敏感度和放大倍数。例如，“油价上涨打击航司利润”是静态结构，但当前油价是 40美元 还是 120美元（节点实时状态），决定了传导杀伤力的指数级差异。分析引擎在进行遍历推演前，只需拉取一遍最新的宏观水位数据即可完成“动态赋权（Dynamic Modifier）”，无需每秒重构整个高维网络。
+> - **结构层 (低频/静态)**：本体拓扑描述的是金融市场的“逻辑物理法则”（如航司依赖燃油），结构极其稳定，无需高频更新。
+> - **参数层 (中高频/动态)**：节点状态（分位数）和边的权重（Beta）由自动化管道从 OpenBB/FRED 等数据源同步。分析引擎推演前，只需基于“当前水位”完成**动态赋权 (Dynamic Modifier)** 即可得出非线性结论，无需每秒重构高维图谱。
+
 
 ### 2.2 推理计算层 (影响分析引擎)
 
@@ -326,38 +329,32 @@ graph TD
 
     subgraph "IRM Container"
         CLI[IRM CLI / irm.sh]
-        ConfigMgr[config_manager.py]
         ValUpdate[update_percentiles.py]
         EarnUpdate[update_earnings.py]
     end
 
     subgraph "Infrastructures"
-        Redis[(Redis - Config Store)]
         FalkorDB[(FalkorDB - Ontology Chart)]
     end
 
-    CLI -->|pe/eps-bands update| ConfigMgr
-    ConfigMgr -->|HSET/HGETALL| Redis
-    ValUpdate -->|PE Bands| Redis
+    CLI -->|pe/eps-bands update| FalkorDB
+    ValUpdate -->|Read Bands| FalkorDB
     ValUpdate -->|Fetch PE| OpenBB
     ValUpdate -->|Update Hub:Valuation| FalkorDB
-    EarnUpdate -->|EPS Bands| Redis
+    EarnUpdate -->|Read Bands| FalkorDB
     EarnUpdate -->|Fetch EPS Growth| OpenBB
     EarnUpdate -->|Update Hub:Earnings| FalkorDB
 ```
 
 #### 2. 核心组件说明
 
-*   **配置层 (Redis)**：
-    *   `irm:config:pe_bands`: 存储 Ticker 对应的 PE 经验区间（用于杀估值判定）。
-    *   `irm:config:eps_bands`: 存储 Ticker 对应的盈利增速预期区间（用于杀业绩判定）。
 *   **执行层 (update_percentiles.py / update_earnings.py)**：
-    1.  **扫描图谱**：查询所有 `(h:Hub:Valuation)` 或 `(h:Hub:Earnings)` 节点。
-    2.  **拉取数据**：调用 `openbb` 获取 `pe_ratio` 或 `earnings_growth` (Forward EPS Growth)。
-    3.  **水位映射**：依据 Redis 中的 `[min, max]` 区间，将绝对指标映射为 **0.0 - 1.0** 的拥挤度分位（Percentile）。
+    1.  **扫描图谱**：查询所有 `(h:Hub)` 节点及其自带的 `min/max` 经验区间。
+    2.  **拉取数据**：调用 `openbb` 获取 `pe_ratio` 或 `earnings_growth`。
+    3.  **水位映射**：直接依据节点内部的 `pe_min/max` 或 `eps_min/max` 属性，将实时指标映射为 **0.0 - 1.0** 的分位水位（Percentile）。
     4.  **写回图谱**：更新 `Hub` 节点的 `percentile` 属性。
 *   **管理层 (IRM CLI)**：
-    *   `irm pe-bands update <ticker> <min> <max>`
+    *   `irm pe-bands update <ticker> <min> <max>` (直接修改图节点属性)
     *   `irm eps-bands update <ticker> <min> <max>`
 
 ---
@@ -431,88 +428,6 @@ graph TD
 
 ---
 
-## 附录：核心实体节点 (Node Types) 与物理属性定义库
-
-在 IRM 本体论中，节点(Node) 严格遵守“只保留客观事实”的解耦原则。所有的业务敏感度、传导方向和放大乘数一律挂载在边(Edge)上。
-
-### 1. 金融与宏观资产类 (`Asset` 及其子标签)
-可交易或可监测的具体标的，用于唯一标识物种其在宏观结构中的角色。
-*   `ticker` *(String, 必填)*: 唯一标识代码（如 'US10Y', 'AAPL', 'VIX'）。
-*   `name` *(String, 必填)*: 资产的中英文全称或简称。
-*   `value` *(Float, 动态脚本维护)*: **当前物理报价/指标值**。引擎（`tracer.py`）利用该值判定是否触发边上的阶跃阈值，或以此计算扰动后的新环境水位。
-*   `percentile` *(Float, 动态脚本维护)*: 该资产在 3 年历史区间内的分位水位。
-*   `metric_type` *(String, 必填)*: **核心计算属性**。`rate` 代表利率/波动率（取差分回归）；`price` 代表价格资产（取收益率回归）。
-*   `region` *(String, 可选)*: 所属地域（如 'US', 'JP'），主要用于宏观利率。
-*   `role` *(String, 可选)*: 宏观角色定义（如 'Global Pricing Anchor'）。
-*   `type` *(String, 可选)*: 资产具体形态（特用于汇率，如 'Fiat Index', 'FX Pair'）。
-*   `market` *(String, 可选)*: 所属金融市场板块（特用于波动率，如 'Equity', 'Fixed Income'）。
-*   `sector` *(String, 可选)*: 资源/物理行业分类（特用于大宗商品，如 'Energy', 'Precious Metals'）。
-*   `style` *(String, 可选)*: 投资组合风格归类（特用于 ETF，如 'Growth', 'Defensive'）。
-*   `supply_type` *(String, 可选)*: 供给模型属性（特用于 Crypto，如 BTC 的 'Fixed'）。
-
-### 2. 微观公司实体 (`Asset:Stock`)
-代表具体的上市公司标的，携带有用于评估实体冲击的财务拆解数据。
-*   继承上述 `Asset` 的核心属性 (`ticker`, `name` 等)。
-*   `foreign_revenue_pct` *(Float, 可选)*: 财报披露的海外营收占比（如 `0.58`）。作为客观物理指标，它将在引擎推演强势美元 (DXY) 冲击时，决定该公司承受汇兑损益折损的底座基数。
-
-### 3. 主题与行业概念聚合网 (`Sector`, `Theme`)
-用于抽象的网状层级，归拢同质化风险或市场共振叙事。
-*   `name` *(String, 必填)*: 标准英文界定名（如 'Information Technology', 'AI Infrastructure'）。
-*   `name_cn` *(String, 可选)*: 辅助中文命名定性。
-
-### 4. 账户维度的终端节点 (`Portfolio`)
-IRM 系统的投顾和凯利公式重分配目标。
-*   `owner` *(String, 必填)*: 账户持有人识别（如 'Admin'）。
-*   `name` *(String, 必填)*: 组合定位名。
-*   `strategy` *(String, 可选)*: 交易主旨大纲（如 'Macro-Thematic Allocation'）。
-*   `currency` *(String, 必填)*: 计价与结算基础币种（如 'USD'）。
-*   `total_value` *(Float, 必填)*: 组合当前整体资产净值规模（如 `1000000`）。
-
-### 5. 定价引擎极值监控节点 (`Hub` - `Valuation` / `Earnings`) ★ 核心
-作为金融泡沫与业绩恐慌的吸收防波堤。
-*   `target` *(String, 必填)*: 指向其映射的底层标的 ticker（如 'NVDA'）。
-*   `name` *(String, 必填)*: 指标特征维度定义（如 'NVDA 估值倍数 (PE)'）。
-*   `pe_percentile` *(Float, 可选)*: **当前 PE 历史分位点（如 `0.95`）**。衡量估值拥挤度。
-*   `erp_percentile` *(Float, 可选)*: **当前 ERP 历史分位点（如 `0.05`）**。衡量个股相对于美债的性价比，是触发利率敏感性崩塌的关键。
-*   `percentile` *(Float, 可选)*: [兼容性保留] 默认为 `pe_percentile`，引擎将优先寻找特定指标。
-*   `value` *(Float, 动态)*: 实时指标原值。
-
----
-
-## 附录：核心传导边 (Edge Types) 与引擎属性库
-
-边 (Edge) 承载了系统所有的“业务逻辑”、“数学敏感度”以及“状态转换阈值”。节点间的互相关联共同织成了风险传导演算网络。
-
-### 1. 边的语义类型 (Edge Relationships)
-*   `[:DRIVES]` **(宏观驱动)**: 描绘金融市场第一推动力（如油价推高通胀预期）或主题叙事爆发（如 AI 概念拉爆龙头股价）。
-*   `[:SPILLS_TO]` **(风险溢出)**: 描绘因资金链脆弱导致跨市场恐慌蔓延（如债市利率剧震引爆股市恐慌）。
-*   `[:PRICES]` **(定价压制)**: 核心算力通道。用于宏观因子或风险因子对资产或定价枢纽进行定点打击（常带有复杂的极值阈值设定）。
-*   `[:COMPOSES]` / `[:TRACKS]` / `[:BELONGS_TO]` / `[:HEAVILY_EXPOSED_TO]` **(结构归属)**: 定义资产间的物理从属特征（如个股占行业圈定的权重，指数占成分股的权重）。
-*   `[:CORRELATES_WITH]` **(相关性补充)**: 捕捉无法用因单项归因解释，但具有统计学同步特征的市场行为。
-*   `[:DETERMINES]` **(价值决定)**: 限定于 Hub (PE/EPS 枢纽) 到底层资产方向。承载 P = PE * EPS 的转化公式。
-*   `[:HOLDS]` **(组合触达)**: 承载终端私人账户 (Portfolio) 对资产的真实持仓明细。
-
-### 2. 传导计算核心属性 (Engine Execution Properties)
-这些属性直接决定引擎 `tracer.py` 如何利用距离衰减公式计算最终冲击。
-
-*   `id` *(String, 必填)*: **唯一标识符**。取值 nanoID (例如 'Vy_777P_YmE9V7VG76u5f')。
-*   `base_beta` *(Float)*: **基准线性敏感度**。表示常态盘整期下，源头节点每变动 1%，目标节点理论上的变动幅面（如 `-1.8`，代表反向放大）。
-*   `gamma_sensitive` *(Boolean)*: **恐慌共振开关**。如果为 `true`，代表此路径在 VIX 飙升等全局恐慌时期极容易发生踩踏出逃，引擎将叠加全局 Gamma 加速器。
-*   `threshold_config` *(String/JSON Array)*: **非线性阶跃/阻断配置**。引擎计算的核心数据驱动层。形如 `[{"min": 0.95, "max": 1.0, "mu": 4.0}, ...]`，引擎会扫描目标节点的当前客观水位并赋予暴风乘数 (mu) 或过滤乘数。
-*   `logic` / `description` *(String)*: **系统推演解说词**。计算引擎不读该字段，它的作用是作为 Prompt 提供给末端投顾 LLM 提取以生成通顺的人类研报（如：*"强势美元抽血加密市场流动性"*）。
-*   `modifier_metric` *(String)*: **[已剥离至架构注释]** (如 'target_percentile')。用以说明上述 `threshold_config` 所对准的目标节点探测字段。
-*   `state_trigger` *(String)*: **[已剥离至架构注释]** (如 'percentile_amplifier', 'margin_dampener')。用作可视化系统的渲染标签指令。
-
-### 3. 静态权重与持仓属性 (Static & Holding Properties)
-主要出现在归属、包含或账户边缘。
-
-*   `composition_weight` / `sector_weight` *(Float)*: 客观成分占比（如科技股占纳斯达克100权重的 `0.58`）。
-*   `weight_pct` *(Float)*: 当前该资产占 Portfolio 的持仓配额百分比（如 `0.25` 代表 25% 仓位）。
-*   `shares` *(Float)*: 持有的具体份额数。
-*   `avg_cost` *(Float)*: 用户交易建仓的基础成本。
-*   `formula` *(String)*: 转化公式口径释义（如 `P=EPS*PE`）。
-
----
 
 ## 5. 系统部署与容器拓扑 (System Deployment & Topology)
 
@@ -531,8 +446,8 @@ IRM 模块采用高度解耦的微服务/容器化设计，以确保计算引擎
 
 2.  **`redis` 存储容器 (FalkorDB + Config Store)**
     *   **角色**：混合型数据中枢。
-    *   **FalkorDB**：作为图数据库（默认 6379 端口），存储整个本体图谱（Nodes/Edges）。
-    *   **Redis Key-Value**：作为配置中心（`irm:config:*`），存储 PE/EPS 的经验带（Bands）和数据源映射。
+    *   **FalkorDB**：作为图数据库（默认 6379 端口），存储整个本体图谱（Nodes/Edges），包括资产的 PE/EPS 经验区间定义。
+    *   **Redis Key-Value**：作为来源管理配置（`irm:config:sources`），存储数据提供商与代码的映射。
 
 ### 5.2 网络拓扑与数据流向
 

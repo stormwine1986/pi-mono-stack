@@ -2,6 +2,7 @@ import os
 import json
 import redis
 import argparse
+import falkordb
 from urllib.parse import urlparse
 
 def get_redis_client():
@@ -11,64 +12,70 @@ def get_redis_client():
     port = parsed.port or 6379
     return redis.Redis(host=host, port=port, decode_responses=True)
 
+def get_falkordb_graph(graph_name="Graph-001"):
+    redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+    parsed = urlparse(redis_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6379
+    db = falkordb.FalkorDB(host=host, port=port)
+    return db.select_graph(graph_name)
+
 def list_pe_bands():
-    r = get_redis_client()
-    bands = r.hgetall("irm:config:pe_bands")
+    graph = get_falkordb_graph()
+    cypher = "MATCH (h:Hub:Valuation) RETURN h.target, h.pe_min, h.pe_max ORDER BY h.target"
+    result = graph.query(cypher)
     
-    if not bands:
-        print("No PE bands configured in Redis.")
+    if not result.result_set:
+        print("No PE bands found in Ontology Graph.")
         return
 
-    print(f"{'Ticker':<10} | {'Min PE':<10} | {'Max PE':<10} | {'Metric':<10}")
+    print(f"{'Ticker':<10} | {'Min PE':<10} | {'Max PE':<10} | {'Source':<10}")
     print("-" * 50)
-    for ticker, data_str in sorted(bands.items()):
-        try:
-            data = json.loads(data_str)
-            min_pe = data.get("min", "N/A")
-            max_pe = data.get("max", "N/A")
-            metric = data.get("metric", "pe_ratio")
-            print(f"{ticker:<10} | {min_pe:<10} | {max_pe:<10} | {metric:<10}")
-        except Exception:
-            print(f"{ticker:<10} | Error parsing data: {data_str}")
+    for row in result.result_set:
+        ticker = row[0]
+        min_pe = row[1] if row[1] is not None else "N/A"
+        max_pe = row[2] if row[2] is not None else "N/A"
+        print(f"{ticker:<10} | {min_pe:<10} | {max_pe:<10} | Graph Node")
 
 def update_pe_band(ticker, min_pe, max_pe):
-    r = get_redis_client()
-    data = {
-        "min": float(min_pe),
-        "max": float(max_pe),
-        "metric": "pe_ratio"
-    }
-    r.hset("irm:config:pe_bands", ticker, json.dumps(data))
-    print(f"Successfully updated PE band for {ticker}: [{min_pe}, {max_pe}]")
-
-def list_eps_bands():
-    r = get_redis_client()
-    bands = r.hgetall("irm:config:eps_bands")
+    graph = get_falkordb_graph()
+    cypher = f"MATCH (h:Hub:Valuation) WHERE h.target = '{ticker}' SET h.pe_min = {min_pe}, h.pe_max = {max_pe} RETURN h"
+    result = graph.query(cypher)
     
-    if not bands:
-        print("No EPS growth bands configured in Redis.")
+    if not result.result_set:
+        # 如果节点不存在，尝试创建或者提示错误。通常应该是先有本体结构。
+        print(f"Error: No Hub:Valuation node found for ticker {ticker}. Please sync schema first.")
         return
 
-    print(f"{'Ticker':<10} | {'Min Growth':<12} | {'Max Growth':<12}")
-    print("-" * 40)
-    for ticker, data_str in sorted(bands.items()):
-        try:
-            data = json.loads(data_str)
-            min_g = data.get("min", "N/A")
-            max_g = data.get("max", "N/A")
-            print(f"{ticker:<10} | {min_g:<12} | {max_g:<12}")
-        except Exception:
-            print(f"{ticker:<10} | Error parsing data: {data_str}")
+    print(f"Successfully updated Graph PE band for {ticker}: [{min_pe}, {max_pe}]")
+
+def list_eps_bands():
+    graph = get_falkordb_graph()
+    cypher = "MATCH (h:Hub:Earnings) RETURN h.target, h.eps_min, h.eps_max ORDER BY h.target"
+    result = graph.query(cypher)
+    
+    if not result.result_set:
+        print("No EPS growth bands found in Ontology Graph.")
+        return
+
+    print(f"{'Ticker':<10} | {'Min Growth':<12} | {'Max Growth':<12} | {'Source':<12}")
+    print("-" * 55)
+    for row in result.result_set:
+        ticker = row[0]
+        min_g = row[1] if row[1] is not None else "N/A"
+        max_g = row[2] if row[2] is not None else "N/A"
+        print(f"{ticker:<10} | {min_g:<12} | {max_g:<12} | Graph Node")
 
 def update_eps_band(ticker, min_growth, max_growth):
-    r = get_redis_client()
-    data = {
-        "min": float(min_growth),
-        "max": float(max_growth),
-        "metric": "earnings_growth"
-    }
-    r.hset("irm:config:eps_bands", ticker, json.dumps(data))
-    print(f"Successfully updated EPS growth band for {ticker}: [{min_growth}, {max_growth}]")
+    graph = get_falkordb_graph()
+    cypher = f"MATCH (h:Hub:Earnings) WHERE h.target = '{ticker}' SET h.eps_min = {min_growth}, h.eps_max = {max_growth} RETURN h"
+    result = graph.query(cypher)
+
+    if not result.result_set:
+        print(f"Error: No Hub:Earnings node found for ticker {ticker}. Please sync schema first.")
+        return
+
+    print(f"Successfully updated Graph EPS growth band for {ticker}: [{min_growth}, {max_growth}]")
 
 def list_sources():
     r = get_redis_client()

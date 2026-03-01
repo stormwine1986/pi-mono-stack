@@ -24,14 +24,9 @@ class PEPercentileUpdater:
             self.db = FalkorDB(host=host, port=port)
             self.graph = self.db.select_graph(graph_name)
             logger.info(f"Connected to FalkorDB at {host}:{port}")
-
-            # 初始化 Redis 用于读取配置
-            self.redis_client = redis.Redis(host=host, port=port, decode_responses=True)
-            logger.info(f"Connected to Redis for config at {host}:{port}")
         except Exception as e:
             logger.error(f"Initialization Failed: {e}")
             self.graph = None
-            self.redis_client = None
 
     def query_falkor(self, cypher):
         if not self.graph:
@@ -43,8 +38,8 @@ class PEPercentileUpdater:
             return None
 
     def get_valuation_hubs(self):
-        """获取所有 PE 枢纽节点"""
-        cypher = "MATCH (h:Hub:Valuation) RETURN h.target, id(h), h.name"
+        """获取所有 PE 枢纽节点及其自有的经验区间"""
+        cypher = "MATCH (h:Hub:Valuation) RETURN h.target, id(h), h.name, h.pe_min, h.pe_max"
         result = self.query_falkor(cypher)
         hubs = []
         if not result or not result.result_set:
@@ -54,12 +49,14 @@ class PEPercentileUpdater:
             hubs.append({
                 "target": row[0],
                 "node_id": row[1],
-                "name": row[2]
+                "name": row[2],
+                "pe_min": row[3],
+                "pe_max": row[4]
             })
         return hubs
 
-    def calculate_pe_percentile(self, ticker):
-        """拉取实时 PE 并结合 Redis 估值带计算百分位"""
+    def calculate_pe_percentile(self, ticker, val_min=None, val_max=None):
+        """拉取实时 PE 并利用节点自带的估值带计算百分位"""
         try:
             logger.info(f"Fetching fundamental metrics for {ticker} via yfinance...")
             # 获取最新基本面指标
@@ -79,17 +76,12 @@ class PEPercentileUpdater:
             current_pe = float(df_metrics[pe_col[0]].iloc[-1])
             logger.info(f"Target {ticker} Current P/E: {current_pe:.2f}")
             
-            # 从 Redis 获取 Bands
-            val_min, val_max = 10.0, 40.0  # 默认宽带
-            
-            band_data = self.redis_client.hget("irm:config:pe_bands", ticker)
-            if band_data:
-                band = json.loads(band_data)
-                val_min = float(band.get("min", val_min))
-                val_max = float(band.get("max", val_max))
-                logger.info(f"Using Redis Bands for {ticker}: [{val_min}, {val_max}]")
+            # 优先使用传入的 Bands，如果没有则使用硬编码默认值
+            if val_min is None or val_max is None:
+                val_min, val_max = 10.0, 40.0
+                logger.warning(f"No bands found on Hub node for {ticker}, using fallback defaults: [{val_min}, {val_max}]")
             else:
-                logger.warning(f"No PE bands in Redis for {ticker}, using fallback defaults.")
+                logger.info(f"Using Graph-based Bands for {ticker}: [{val_min}, {val_max}]")
 
             # 线性映射 0.0 - 1.0 (带极值修剪)
             if current_pe <= val_min:
@@ -106,7 +98,7 @@ class PEPercentileUpdater:
             return None
 
     def run(self):
-        if not self.graph or not self.redis_client:
+        if not self.graph:
             return
 
         hubs = self.get_valuation_hubs()
@@ -115,8 +107,10 @@ class PEPercentileUpdater:
         for hub in hubs:
             target = hub['target']
             node_id = hub['node_id']
+            pe_min = hub['pe_min']
+            pe_max = hub['pe_max']
             
-            percentile = self.calculate_pe_percentile(target)
+            percentile = self.calculate_pe_percentile(target, pe_min, pe_max)
             
             if percentile is not None:
                 cypher = f"MATCH (h:Hub) WHERE id(h) = {node_id} SET h.percentile = {percentile:.4f}"
