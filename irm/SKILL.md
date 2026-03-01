@@ -91,6 +91,9 @@ docker exec irm irm graph nodes --label Hub
 
 # 查看边配置与传导逻辑 (Beta, 非线性阶跃阈值, 逻辑说明)
 docker exec irm irm graph edges
+
+# 执行自定义 Cypher 语句查询/修改图谱
+docker exec irm irm graph exec "MATCH (n) RETURN COUNT(n)"
 ```
 
 ### 5. 系统备份与恢复 (Maintenance)

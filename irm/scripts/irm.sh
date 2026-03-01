@@ -37,9 +37,12 @@ case "$COMMAND" in
             edges)
                 python3 /app/scripts/analyzer/edge_viewer.py "$@"
                 ;;
+            exec)
+                python3 /app/scripts/analyzer/graph_exec.py "$@"
+                ;;
             *)
                 echo "Unknown graph command: $SUBCOMMAND"
-                echo "Usage: irm graph {nodes|edges}"
+                echo "Usage: irm graph {nodes|edges|exec}"
                 ;;
         esac
         ;;
@@ -68,7 +71,7 @@ case "$COMMAND" in
         echo "  portfolio update - Update a specific holding (e.g. irm portfolio update NVDA 300 850)"
         echo "  portfolio advisor - Get Kelly-based allocation advice (requires impacts/weights)"
 
-        echo "  graph     - Graph operations (nodes, edges)"
+        echo "  graph     - Graph operations (nodes, edges, exec)"
  
         echo "  backup    - Export live Ontology data and Configs to .irm directory"
         echo "  store     - Restore data and configs from EXPORTED backups in .irm"
