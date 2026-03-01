@@ -33,9 +33,11 @@
 | `[:DRIVES]` | **宏观驱动** | 描绘因果链条（如：油价推高通胀预期）。 |
 | `[:SPILLS_TO]` | **风险溢出** | 描述跨市场恐慌传染（如：债市震荡引发股市 VIX 飙升）。 |
 | `[:PRICES]` | **定价压制** ★ | **核心算力通道**。承载 `base_beta` (基准敏感度) 与 `threshold_config` (非线性阶跃 JSON)。 |
+| `[:CORRELATES_WITH]` | **资产相关性** | 描述具有强正/负相关的资产联动关系，用于计算避险或溢出。 |
+| `[:HEAVILY_EXPOSED_TO]` | **重度暴露** | 描述资产对特定行业或风险因素（如 AI 基础设施）的非对称暴露。 |
 | `[:DETERMINES]` | **价值决定** | 限定于 `Hub` → `Asset` 方向。承载 $P = PE \times EPS$ 的决定逻辑。 |
-| `[:Structural]` | **结构归属** | 含 `BELONGS_TO`, `COMPOSES`, `TRACKS` 等。携带 `composition_weight` 属性定义成分权重。 |
-| `[:HOLDS]` | **仓位触达** ★ | **实时联动边**。仅承载 `weight_pct` (资产市值占比)。对应的物理账本（`shares` 股数、`avg_cost` 成本）解耦存储在 Redis Hash (`irm:portfolio:{owner}:holdings:{ticker}`) 中。当账本变动时，系统自动重算此边的权重。 |
+| `[:BELONGS_TO]` / `[:COMPOSES]` / `[:TRACKS]` | **结构归属** | 定义行业归属、成分占比或指数追踪关系。携带 `composition_weight` 属性。 |
+| `[:HOLDS]` | **仓位触达** ★ | **实时联动边**。承载 `weight_pct` (资产市值占比)。与之关联的物理账本（股数、成本）存储在 Redis 中。 |
 
 > [!tip] 图谱更新机制：静态结构与动态权重的分离
 > - **结构层 (低频/静态)**：本体拓扑描述的是金融市场的“逻辑物理法则”（如航司依赖燃油），结构极其稳定，无需高频更新。

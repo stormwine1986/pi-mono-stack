@@ -26,12 +26,13 @@ SET a.base_win_rate = 0.55,
     a.expected_max_dd = 0.20
 """)
 
-print("3. Overriding specific high-conviction assets with custom assumptions...")
+# 3. Overriding specific high-conviction assets with custom assumptions...
 assumptions = {
     # 纳指/宽基 ETF: 胜率降至更可持续的水平，1:1 的赔率比符合宽基特征。
     "QQQM": {"base_win_rate": 0.58, "upside": 0.25, "max_dd": 0.25}, 
     "VGK":  {"base_win_rate": 0.58, "upside": 0.25, "max_dd": 0.25},
     "BBJP": {"base_win_rate": 0.58, "upside": 0.25, "max_dd": 0.25},
+    "FLKR": {"base_win_rate": 0.58, "upside": 0.25, "max_dd": 0.25}, # 韩国股市 ETF
 
     # 权重科技股: 相比 ETF，个股需增加回撤预期至 30% 以应对中期调整。
     "AAPL": {"base_win_rate": 0.56, "upside": 0.30, "max_dd": 0.30},
@@ -55,8 +56,14 @@ assumptions = {
 }
 
 for ticker, data in assumptions.items():
-    cypher = f"""MATCH (a:Investable {{ticker: '{ticker}'}}) 
-                 SET a.base_win_rate = {data['base_win_rate']}, 
+    # Ensure node exists as an Asset (default label for new assets)
+    # If it's an ETF, we should ideally label it as such if creating from scratch.
+    if ticker == "FLKR":
+         graph.query(f"MERGE (a:Asset {{ticker: '{ticker}'}}) ON CREATE SET a:EquityETF, a.name = 'Franklin FTSE South Korea ETF', a.name_cn = '韩国股市 ETF'")
+    
+    cypher = f"""MATCH (a:Asset {{ticker: '{ticker}'}}) 
+                 SET a:Investable,
+                     a.base_win_rate = {data['base_win_rate']}, 
                      a.expected_upside = {data['upside']}, 
                      a.expected_max_dd = {data['max_dd']}"""
     graph.query(cypher)
