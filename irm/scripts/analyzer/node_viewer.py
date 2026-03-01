@@ -55,10 +55,11 @@ class IRMNodeViewer:
             right_pad = padding - left_pad
             return (' ' * left_pad) + text + (' ' * right_pad)
 
-    def list_nodes(self):
-        """Fetch and display all nodes except Portfolio with ALL relevant attributes."""
+    def list_nodes(self, filter_label=None):
+        """Fetch and display all nodes except Portfolio with optional label filtering."""
+        label_match = f":{filter_label}" if filter_label else ""
         cypher = (
-            "MATCH (n) WHERE NOT n:Portfolio "
+            f"MATCH (n{label_match}) WHERE NOT n:Portfolio "
             "RETURN labels(n), "
             "       COALESCE(n.ticker, n.target, '-'), "
             "       n.name, "
@@ -160,7 +161,8 @@ class IRMNodeViewer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRM Node Viewer")
+    parser.add_argument("--label", help="Filter nodes by label (e.g. Investable, Stock, Sector)")
     args = parser.parse_args()
     
     viewer = IRMNodeViewer()
-    viewer.list_nodes()
+    viewer.list_nodes(filter_label=args.label)
