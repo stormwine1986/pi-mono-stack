@@ -57,8 +57,8 @@ else
     # Register percentile update (Daily at 12:00)
     register_job "update-percentiles" "0 0 12 * * *" "docker exec irm python3 /app/scripts/ontology/update_percentiles.py"
     
-    # Register price signals update (Weekly on Monday at 12:00)
-    register_job "update-price-signals" "0 0 12 * * 1" "docker exec irm python3 /app/scripts/ontology/update_price_signals.py"
+    # Register price signals update (Daily at 12:00)
+    register_job "update-price-signals" "0 0 12 * * *" "docker exec irm python3 /app/scripts/ontology/update_price_signals.py"
 
     # Register Beta calculation (Manual only)
     register_job "calc-betas" "@manually" "docker exec irm python3 /app/scripts/ontology/calc_betas.py"
