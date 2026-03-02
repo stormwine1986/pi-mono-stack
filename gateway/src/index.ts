@@ -11,7 +11,7 @@ import { TelegramSender } from './telegram/sender.js';
 import { startResultListener } from './telegram/listener.js';
 import { startDkronListener } from './dkron/listener.js';
 import { startReminderListener } from './dkron/reminder.js';
-import { setupRecoveryJob } from './dkron/setup.js';
+import { setupAllJobs } from './dkron/setup.js';
 import { registerHandlers } from './telegram/handlers.js';
 import { logger } from './logger.js';
 
@@ -58,7 +58,7 @@ async function main() {
         startReminderListener(redisProducer, redisReminderConsumer, sender);
 
         // Setup Dkron jobs
-        setupRecoveryJob();
+        setupAllJobs();
 
         const stop = () => {
             bot.stop();
