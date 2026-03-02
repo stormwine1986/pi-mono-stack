@@ -39,7 +39,7 @@ async function main() {
 
         bot.launch({
             allowedUpdates: ['message', 'callback_query', 'photo'] as any,
-            dropPendingUpdates: true
+            dropPendingUpdates: false
         });
         logger.info('TG Bot launched successfully');
 

@@ -22,6 +22,7 @@ services:
       - redis
     environment:
       - REDIS_URL=redis://127.0.0.1:6379
+      - DKRON_URL=http://127.0.0.1:18047/v1
       - RCLONE_CONFIG_S3_TYPE=s3
       - RCLONE_CONFIG_S3_PROVIDER=Other
       - RCLONE_CONFIG_S3_ACCESS_KEY_ID
@@ -86,6 +87,7 @@ services:
       network: host
     container_name: dkron
     environment:
+      - DKRON_HTTP_ADDR=:18047
       - REDIS_URL=redis://127.0.0.1:6379
     volumes:
       - ./.pi/agent/workspace/.dkron:/dkron.data:rw
@@ -202,6 +204,9 @@ services:
       role: Tools
     network_mode: host
     restart: unless-stopped
+    depends_on:
+      - redis
+      - dkron
 
 volumes:
   redis_data:

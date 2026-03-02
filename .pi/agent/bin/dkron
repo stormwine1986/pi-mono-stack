@@ -9,8 +9,7 @@
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 
-const DKRON_PORT = 18047;
-const DKRON_URL = `http://127.0.0.1:${DKRON_PORT}/v1`;
+const DKRON_URL = process.env.DKRON_URL || 'http://127.0.0.1:18047/v1';
 
 const args = process.argv.slice(2);
 
@@ -109,9 +108,13 @@ function generateId(size = 12) {
     return id;
 }
 
-async function callDkron(path, method = 'GET', data = null) {
+async function callDkron(path, method = 'GET', data = null, timeout = null) {
     const url = `${DKRON_URL}${path}`;
     const curlArgs = ['-sS', '-X', method, url];
+
+    if (timeout) {
+        curlArgs.push('--max-time', timeout.toString());
+    }
 
     if (data) {
         curlArgs.push('-H', 'Content-Type: application/json');
@@ -121,6 +124,10 @@ async function callDkron(path, method = 'GET', data = null) {
     const result = spawnSync('curl', curlArgs, { encoding: 'utf8' });
 
     if (result.status !== 0) {
+        // Exit code 28 is CURLE_OPERATION_TIMEDOUT
+        if (timeout && result.status === 28) {
+            throw new Error('timeout');
+        }
         console.error('Error calling Dkron API:');
         console.error('Exit code:', result.status);
         console.error('Stderr:', result.stderr);
@@ -239,8 +246,19 @@ switch (command) {
                     console.error('Error: job name is required');
                     process.exit(1);
                 }
-                const res = await callDkron(`/jobs/${name}`, 'POST');
-                console.log(JSON.stringify(res, null, 2));
+                // Asynchronous trigger: we use a short timeout (2s) so the CLI returns quickly
+                // even if the job takes a long time. Dkron will continue execution.
+                try {
+                    const res = await callDkron(`/jobs/${name}`, 'POST', null, 2);
+                    console.log(JSON.stringify(res, null, 2));
+                } catch (e) {
+                    // If it's a timeout, it likely triggered successfully
+                    if (e.message && e.message.includes('timeout')) {
+                        console.log(`Job "${name}" triggered successfully (async).`);
+                    } else {
+                        throw e;
+                    }
+                }
                 break;
             }
             // ── job delete ──────────────────────────────────

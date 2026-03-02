@@ -33,4 +33,4 @@ RUN apk add --no-cache curl docker-cli redis
 ENV GODEBUG=netdns=go
 
 # Set Entrypoint Command
-CMD ["agent", "--server", "--log-level=info", "--http-addr=:18047", "--bootstrap-expect=1"]
+CMD ["agent", "--server", "--log-level=info", "--bootstrap-expect=1"]
