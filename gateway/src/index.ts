@@ -1,4 +1,10 @@
+import dns from 'node:dns';
+import { Agent } from 'node:https';
 import { Telegraf } from 'telegraf';
+
+// Force DNS resolution to prioritize IPv4 (fixes issues where IPv6 is broken or slow)
+dns.setDefaultResultOrder('ipv4first');
+
 import { Redis } from 'ioredis';
 import { config } from './config.js';
 import { TelegramSender } from './telegram/sender.js';
@@ -9,7 +15,11 @@ import { setupRecoveryJob } from './dkron/setup.js';
 import { registerHandlers } from './telegram/handlers.js';
 import { logger } from './logger.js';
 
-const bot = new Telegraf(config.telegramToken);
+const bot = new Telegraf(config.telegramToken, {
+    telegram: {
+        agent: new Agent({ family: 4 })
+    }
+});
 const sender = new TelegramSender(bot);
 const redisProducer = new Redis(config.redisUrl);
 const redisConsumer = new Redis(config.redisUrl);
