@@ -43,6 +43,7 @@ function showHelp() {
     console.log('skill: Tool Container Activation & Skill Management');
     console.log('\nUsage:');
     console.log('  skill install <container_name>    Activate or update a tool container skill');
+    console.log('  skill remove <container_name>     Deactivate and remove a tool container and its registration');
     console.log('  skill ls [container_name]         List registered skills and their metadata');
     console.log('  skill scan [container_name]       Check if tool containers are installed or expired');
     console.log('                                    (Defaults to scanning all containers with label role=Tools)');
@@ -51,6 +52,7 @@ function showHelp() {
     console.log('  -h, --help                        Show this help message');
     console.log('\nExamples:');
     console.log('  skill install wikipedia');
+    console.log('  skill remove wikipedia');
     console.log('  skill ls');
     console.log('  skill scan wikipedia');
     process.exit(0);
@@ -65,6 +67,8 @@ async function main() {
 
     if (COMMAND === 'install' && CONTAINER_NAME) {
         await installSkill(CONTAINER_NAME);
+    } else if (COMMAND === 'remove' && CONTAINER_NAME) {
+        await removeSkill(CONTAINER_NAME);
     } else if (COMMAND === 'ls') {
         await listSkills(CONTAINER_NAME);
     } else if (COMMAND === 'scan') {
@@ -282,6 +286,38 @@ async function installSkill(name) {
         console.log(`\x1b[32m[Skill] DONE. Container ${name} is now ACTIVE.\x1b[0m`);
     } catch (err) {
         console.error(`\x1b[31m[Skill] Error: ${err.message}\x1b[0m`);
+        process.exit(1);
+    }
+}
+
+async function removeSkill(name) {
+    try {
+        console.log(`\x1b[36m[Skill] Deactivation procedure started for container: ${name}...\x1b[0m`);
+
+        // 1. Stop and Remove container
+        console.log(`\x1b[36m[Skill] Stopping and removing container ${name}...\x1b[0m`);
+        try {
+            sh(`docker stop ${name}`, { failSilently: true });
+            sh(`docker rm ${name}`, { failSilently: true });
+        } catch (e) {
+            console.log(`\x1b[33m[Skill] Warning during container removal: ${e.message}\x1b[0m`);
+        }
+
+        // 2. Remove from workspace
+        const targetDir = path.join(SKILLS_DIR, name);
+        if (fs.existsSync(targetDir)) {
+            console.log(`\x1b[36m[Skill] Removing skill directory: ${targetDir}\x1b[0m`);
+            fs.rmSync(targetDir, { recursive: true, force: true });
+        }
+
+        // 3. Remove from Registration (SQLite)
+        console.log(`\x1b[36m[Skill] Cleaning registration data...\x1b[0m`);
+        const sql = `DELETE FROM active_skills WHERE container_name = '${name}';`;
+        execSync(`sqlite3 ${SKILLS_DB} "${sql}"`);
+
+        console.log(`\x1b[32m[Skill] DONE. Container ${name} has been removed and deregistered.\x1b[0m`);
+    } catch (err) {
+        console.error(`\x1b[31m[Skill] Error during removal: ${err.message}\x1b[0m`);
         process.exit(1);
     }
 }

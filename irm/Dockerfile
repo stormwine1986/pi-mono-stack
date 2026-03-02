@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y git curl redis-tools && rm -rf /var/lib
 
 # Install python dependencies for risk management
 RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
-    pip install --no-cache-dir requests pandas numpy scipy redis falkordb openbb && \
+    pip install --no-cache-dir requests pandas numpy scipy redis falkordb openbb httpx && \
     python -c "from openbb import obb" || true && \
     chmod -R 777 /usr/local/lib/python3.11/site-packages/openbb /usr/local/lib/python3.11/site-packages/openbb_core || true
 

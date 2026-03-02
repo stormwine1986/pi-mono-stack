@@ -61,6 +61,9 @@ case "$COMMAND" in
         bash /home/pi-mono/.pi/agent/workspace/.irm/EXPORTED_CONFIG.sh
         echo "[+] Restore complete."
         ;;
+    pmk)
+        python3 /app/scripts/pmk/gamma_tool.py "$@"
+        ;;
     help|*)
         echo "IRM (Investment Risk Management) CLI"
         echo "Usage: irm <command> [options]"
@@ -70,12 +73,14 @@ case "$COMMAND" in
         echo "  portfolio list   - List asset allocation status for a specified owner"
         echo "  portfolio update - Update a specific holding (e.g. irm portfolio update NVDA 300 850)"
         echo "  portfolio advisor - Get Kelly-based allocation advice (requires impacts/weights)"
-
+        echo ""
+        echo "  pmk search - Search Polymarket prediction markets"
+        echo ""
         echo "  graph     - Graph operations (nodes, edges, exec)"
  
         echo "  backup    - Export live Ontology data and Configs to .irm directory"
         echo "  store     - Restore data and configs from EXPORTED backups in .irm"
-        echo "  sources   - Manage data sources configuration (ls, update)"
+        echo "  sources   - Manage data sources configuration (ls, update, query)"
         echo ""
         echo "Use 'irm <command> --help' for more information on a specific command."
         ;;

@@ -58,20 +58,6 @@ def search_markets(args):
     except Exception as e:
         print(f"Error searching markets: {e}", file=sys.stderr)
 
-def get_market(args):
-    if not args.target:
-        print("Error: Market ID required", file=sys.stderr)
-        sys.exit(1)
-    import httpx
-    url = f"https://gamma-api.polymarket.com/markets/{args.target}"
-    try:
-        resp = httpx.get(url)
-        resp.raise_for_status()
-        market = resp.json()
-        # 'get' command shows full fields by default
-        print(json.dumps(market, indent=2))
-    except Exception as e:
-        print(f"Error fetching market: {e}", file=sys.stderr)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -80,15 +66,9 @@ def main():
         epilog="""
 Examples:
   gamma_tool search "Bitcoin" --limit 5
-  gamma_tool get 517310
 """
     )
     subparsers = parser.add_subparsers(dest="action", required=True, help="Available actions")
-
-    # Get action
-    get_parser = subparsers.add_parser("get", help="Get detailed market metadata")
-    get_parser.description = "Retrieve full metadata for a specific market using its unique ID."
-    get_parser.add_argument("target", help="The unique Market ID (e.g., 517310)")
 
     # Search action
     search_parser = subparsers.add_parser("search", help="Search markets by keyword")
@@ -98,9 +78,7 @@ Examples:
 
     args = parser.parse_args()
 
-    if args.action == "get":
-        get_market(args)
-    elif args.action == "search":
+    if args.action == "search":
         args.query = args.target
         search_markets(args)
 

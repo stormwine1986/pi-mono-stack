@@ -1,6 +1,6 @@
 ---
 name: "irm"
-description: "基于本体知识图谱的投资风险管理 (IRM) 模块。用于宏观到微观的影响传导分析、非线性风险评估以及基于凯利公式的仓位优化。"
+description: "基于本体知识图谱的投资风险管理 (IRM) 模块。用于宏观到微观的影响传导分析、非线性风险评估、基于凯利公式的仓位优化、实时数据源查询，以及集成 Polymarket 预测市场搜索。"
 ---
 
 # 本体论风控 (IRM) 技能
@@ -48,6 +48,9 @@ docker exec irm irm sources ls
 
 # 更新或新增一个数据源
 docker exec irm irm sources update <ticker> <symbol> <provider>
+
+# 获取最新数值 (例如查询 QQQM)
+docker exec irm irm sources query QQQM
 ```
 
 ### 2. 持仓账本维护 (Portfolio Management)
@@ -76,7 +79,14 @@ docker exec irm irm tracer --ticker "US10Y" --delta 0.5
 docker exec irm irm portfolio advisor --impacts '{"QQQM": -5, "NVDA": 10}'
 ```
 
-### 4. 图谱审计与可视化 (Graph Auditing)
+### 4. 预测市场集成 (Polymarket Integration)
+访问 Polymarket 预测市场数据，用于辅助判断宏观事件概率或市场情绪。
+```bash
+# 搜索预测市场 (例如搜索 Bitcoin 相关市场)
+docker exec irm irm pmk search "Bitcoin"
+```
+
+### 5. 图谱审计与可视化 (Graph Auditing)
 查看当前本体图谱的节点属性、风险参数及传导逻辑配置。
 
 ```bash
@@ -96,7 +106,7 @@ docker exec irm irm graph edges
 docker exec irm irm graph exec "MATCH (n) RETURN COUNT(n)"
 ```
 
-### 5. 系统备份与恢复 (Maintenance)
+### 6. 系统备份与恢复 (Maintenance)
 涵盖图谱拓扑、边逻辑及 Redis 中的动态持仓账本。
 ```bash
 docker exec irm irm backup

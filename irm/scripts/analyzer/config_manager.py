@@ -49,7 +49,7 @@ def update_source(ticker, symbol, provider):
     r.hset("irm:config:sources", ticker, json.dumps(data))
     print(f"Successfully updated source {ticker}: {symbol} via {provider}")
 
-def test_sources(target_ticker=None):
+def query_source(target_ticker=None):
     r = get_redis_client()
     assets = r.hgetall("irm:config:sources")
     
@@ -62,14 +62,14 @@ def test_sources(target_ticker=None):
         to_test = assets
 
     if not to_test:
-        print("No sources to test.")
+        print("No sources to query.")
         return
 
-    print("[*] Initializing OpenBB SDK for testing (this might take a few seconds)...")
+    print("[*] Initializing OpenBB SDK (this might take a few seconds)...")
     try:
         from openbb import obb
     except ImportError:
-        print("Error: OpenBB SDK not found. Cannot perform tests.")
+        print("Error: OpenBB SDK not found. Cannot perform query.")
         return
 
     fred_api_key = os.getenv("FRED_API_KEY")
@@ -137,8 +137,8 @@ def main():
     update_sources_parser.add_argument("symbol", help="Provider symbol (e.g. ^TNX)")
     update_sources_parser.add_argument("provider", choices=["yfinance", "fred"], help="Data provider")
     
-    test_sources_parser = sources_subparsers.add_parser("test", help="Test connectivity of data sources")
-    test_sources_parser.add_argument("--ticker", help="Optionally test only one ticker")
+    query_sources_parser = sources_subparsers.add_parser("query", help="Query real-time data from sources")
+    query_sources_parser.add_argument("ticker", nargs="?", help="Specific ticker to query (optional)")
 
     args = parser.parse_args()
 
@@ -147,10 +147,10 @@ def main():
             list_sources()
         elif args.subcommand == "update":
             update_source(args.ticker, args.symbol, args.provider)
-        elif args.subcommand == "test":
-            test_sources(args.ticker)
+        elif args.subcommand == "query":
+            query_source(args.ticker)
         else:
-            print("Usage: irm sources {ls,update,test}")
+            print("Usage: irm sources {ls,update,query}")
     else:
         parser.print_help()
 

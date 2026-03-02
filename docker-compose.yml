@@ -142,28 +142,6 @@ services:
     network_mode: host
     restart: unless-stopped
 
-  tradingview:
-    build:
-      context: tradingview
-      dockerfile: Dockerfile
-      network: host
-    container_name: tradingview
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-
-  polymarket:
-    build:
-      context: polymarket
-      dockerfile: Dockerfile
-      network: host
-    container_name: polymarket
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-
   wikipedia:
     build:
       context: wikipedia
