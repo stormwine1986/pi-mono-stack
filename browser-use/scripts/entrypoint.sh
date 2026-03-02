@@ -24,6 +24,24 @@ fi
 # 切换到目标工作目录（防止 WORKDIR 因为挂载失效或偏移）
 cd "$BROWSER_USE_DIR"
 
+# 注册 Dkron 清理任务
+if [ -n "$DKRON_URL" ]; then
+    echo "Registering cleanup job to Dkron at $DKRON_URL..."
+    curl -s -X POST "${DKRON_URL}/jobs" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "name": "browser-use-temp-cleanup",
+            "schedule": "@every 2h",
+            "owner": "browser-use",
+            "executor": "shell",
+            "executor_config": {
+                "command": "docker exec browser-use find /home/pi-mono/.pi/agent/workspace/.browser-use -type f -mmin +60 -delete"
+            },
+            "retries": 1,
+            "concurrency": "forbid"
+        }' || echo "Warning: Failed to register Dkron job."
+fi
+
 echo "Browser-use container is ready."
 echo "Current Directory: $(pwd)"
 echo "You can now use 'docker exec browser-use browser-use <command>'"

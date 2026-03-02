@@ -5,6 +5,11 @@ FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
 # Install uv for fast package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install browser-use and playwright
 RUN uv pip install --system --no-cache --prerelease=allow "browser-use[cli]" playwright
 

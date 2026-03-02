@@ -91,7 +91,6 @@ services:
       - REDIS_URL=redis://127.0.0.1:6379
     volumes:
       - ./.pi/agent/workspace/.dkron:/dkron.data:rw
-      - ./.pi/agent/workspace/.scheduler:/home/pi-mono/.pi/agent/workspace/.scheduler:rw
       - /var/run/docker.sock:/var/run/docker.sock
     network_mode: host
     restart: unless-stopped
@@ -106,6 +105,7 @@ services:
     container_name: browser-use
     environment:
       - HOME=/home/pi-mono
+      - DKRON_URL=http://127.0.0.1:18047/v1
     volumes:
       - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace
     labels:
