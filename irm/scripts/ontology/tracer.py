@@ -66,7 +66,7 @@ class IRMTracer:
     def get_neighbors(self, ticker):
         """Find nodes impacted by the given ticker and return edge attributes + target node state."""
         cypher = (
-            f"MATCH (n)-[r]->(m) WHERE COALESCE(n.ticker, n.name) = '{ticker}' "
+            f"MATCH (n)-[r]->(m) WHERE toUpper(COALESCE(n.ticker, n.name)) = '{ticker.upper()}' "
             f"RETURN COALESCE(m.ticker, m.name), type(r), r.base_beta, r.gamma_sensitive, "
             f"r.state_trigger, labels(m)[0], m.percentile, r.modifier_metric, r.threshold_config, n.percentile, "
             f"m.pe_percentile, m.erp_percentile, r.id"
@@ -206,7 +206,7 @@ class IRMTracer:
                 print(f"[{depth+1}] {new_path_str} ({n['rel_type']} ID:{n.get('id')}): {round(impact, 4)}%  ({n['label']})")
 
                 # Continue traversal if impact is still significant
-                if abs(impact) > 0.05:
+                if abs(impact) > 0.01:
                     queue.append((target, impact, depth + 1, new_path_str))
 
         return results
