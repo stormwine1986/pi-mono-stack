@@ -149,6 +149,8 @@ services:
     container_name: swe
     environment:
       - GITHUB_TOKEN
+      - HF_TOKEN
+      - HF_ENDPOINT=https://hf-mirror.com
       - DKRON_URL=http://127.0.0.1:18047/v1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

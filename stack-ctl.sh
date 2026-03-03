@@ -18,6 +18,7 @@ load_secrets() {
   export VOYAGE_API_KEY="$(pass show VOYAGE_API_KEY)"
   export TAVILY_API_KEY="$(pass show TAVILY_API_KEY)"
   export GITHUB_TOKEN="$(pass show GITHUB_TOKEN)"
+  export HF_TOKEN="$(pass show HF_TOKEN)"
   export TWITTERAPI_KEY="$(pass show TWITTERAPI_KEY)"
   export FRED_API_KEY="$(pass show FRED_API_KEY)"
   export RCLONE_CONFIG_S3_ACCESS_KEY_ID="$(pass show RCLONE_CONFIG_S3_ACCESS_KEY_ID)"

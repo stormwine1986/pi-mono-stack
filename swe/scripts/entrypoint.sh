@@ -13,6 +13,9 @@ gh auth setup-git
 docker --version
 git --version
 gh --version
+gh auth status || echo "GitHub not authenticated"
+echo "huggingface-hub version: $(hf version)"
+hf auth whoami || echo "Hugging Face not authenticated"
 echo "User: $(whoami) (UID: $(id -u))"
 echo "Workdir: $(pwd)"
 
@@ -41,12 +44,10 @@ fi
 WORKSPACE_DIR="/home/pi-mono/.pi/agent/workspace"
 if [ -d "$WORKSPACE_DIR" ]; then
     SWE_DIR="$WORKSPACE_DIR/.swe"
-    if [ ! -d "$SWE_DIR" ]; then
-        echo "Initializing .swe directory at $SWE_DIR..."
-        mkdir -p "$SWE_DIR"
-    else
-        echo ".swe directory already exists at $SWE_DIR"
-    fi
+    DOWNLOAD_DIR="$SWE_DIR/download"
+    echo "Ensuring .swe directories exist at $SWE_DIR..."
+    mkdir -p "$DOWNLOAD_DIR"
+    echo "Successfully ensuring $DOWNLOAD_DIR exists."
 else
     echo "Warning: Workspace directory $WORKSPACE_DIR does not exist."
 fi

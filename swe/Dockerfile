@@ -1,7 +1,10 @@
 FROM alpine:latest
 
 # Install github-cli, git, bash and other dependencies (SWE module)
-RUN apk add --no-cache github-cli bash git docker-cli curl
+RUN apk add --no-cache github-cli bash git docker-cli curl python3 py3-pip
+
+# Install huggingface_hub[cli]
+RUN pip install --no-cache-dir "huggingface_hub[cli]" --break-system-packages
 
 # Create pi-mono user and group with UID/GID 1000
 RUN addgroup -g 1000 pi-mono && \
