@@ -9,8 +9,8 @@ import { Redis } from 'ioredis';
 import { config } from './config.js';
 import { TelegramSender } from './telegram/sender.js';
 import { startResultListener } from './telegram/listener.js';
-import { startDkronListener } from './dkron/listener.js';
 import { startReminderListener } from './dkron/reminder.js';
+import { startSummaryListener } from './summary.js';
 import { setupAllJobs } from './dkron/setup.js';
 import { registerHandlers } from './telegram/handlers.js';
 import { logger } from './logger.js';
@@ -23,8 +23,8 @@ const bot = new Telegraf(config.telegramToken, {
 const sender = new TelegramSender(bot);
 const redisProducer = new Redis(config.redisUrl);
 const redisConsumer = new Redis(config.redisUrl);
-const redisDkronConsumer = new Redis(config.redisUrl);
 const redisReminderConsumer = new Redis(config.redisUrl);
+const redisSummaryConsumer = new Redis(config.redisUrl);
 
 // Register Event Handlers
 registerHandlers(bot, redisProducer);
@@ -54,8 +54,8 @@ async function main() {
         logger.info('TG Bot launched successfully');
 
         startResultListener(bot, sender, redisConsumer);
-        startDkronListener(redisProducer, redisDkronConsumer, sender);
         startReminderListener(redisProducer, redisReminderConsumer, sender);
+        startSummaryListener(redisSummaryConsumer, sender);
 
         // Setup Dkron jobs
         setupAllJobs();
@@ -64,8 +64,8 @@ async function main() {
             bot.stop();
             redisProducer.disconnect();
             redisConsumer.disconnect();
-            redisDkronConsumer.disconnect();
             redisReminderConsumer.disconnect();
+            redisSummaryConsumer.disconnect();
             process.exit(0);
         };
         process.once('SIGINT', stop);

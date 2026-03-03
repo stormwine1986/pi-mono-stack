@@ -55,6 +55,7 @@ services:
       - REDIS_URL=redis://127.0.0.1:6379
       - TG_ADMIN_ID=7722403902
       - DKRON_URL=http://127.0.0.1:18047/v1
+      - LLAMA_SERVER_URL=http://127.0.0.1:18080/v1
 
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.81.9-nightly
@@ -208,6 +209,32 @@ services:
         condition: service_started
       dkron:
         condition: service_healthy
+
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-server
+    volumes:
+      - ./.pi/agent/workspace/.swe/download:/models
+    command: >
+      -m /models/Qwen3.5-9B-Q5_K_M.gguf
+      --port 18080
+      --host 0.0.0.0
+      -c 262114
+      -np 1
+      --flash-attn on
+      --n-gpu-layers 99
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --metrics
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    network_mode: host
+    restart: unless-stopped
 
 volumes:
   redis_data:
