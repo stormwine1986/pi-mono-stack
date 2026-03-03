@@ -71,7 +71,7 @@ cmd_backup() {
     echo "❌ Error: Workspace directory not found at ${SCRIPT_DIR}/.pi/agent/workspace"
     exit 1
   fi
-  tar -czf "${LOCAL_BACKUP_PATH}" -C "${SCRIPT_DIR}/.pi/agent" workspace
+  tar --exclude='*.gguf' -czf "${LOCAL_BACKUP_PATH}" -C "${SCRIPT_DIR}/.pi/agent" workspace
 
   echo "📤 Uploading backup to ${REMOTE} …"
   rclone copy "${LOCAL_BACKUP_PATH}" "${REMOTE}"

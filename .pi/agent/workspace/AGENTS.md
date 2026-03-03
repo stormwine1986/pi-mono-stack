@@ -8,7 +8,7 @@ reference `references/OVERVIEW.md` for more information
 ## Agent 子系统
 - 必须使用 `date` 命令查询系统的UTC当前时间，禁止随机编造当前时间.答复用户时必须使用用户所在时区的本地时间。用户提及的时间，如没有特别标记，都是用户所在时区的本地时间。
 - 必须使用 `media image send <path>` 发送图片，具体用法见 `media -h`。禁止使用 `read` 命令发送图片。
-- 备份工作区数据，必须参照 [工作区备份标准操作程序](./references/SOP_Workspace_Backup.md) 进行。
+- 拉取Docker镜像相关任务，必须参照 [Docker 标准操作程序](./references/SOP_Docker.md) 进行。
 
 ## 计算子系统 Compute Subsystem
 Manages different compute source configurations, providing compute support for the agent system. The core command is `compute`. 
