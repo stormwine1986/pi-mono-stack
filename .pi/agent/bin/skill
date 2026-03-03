@@ -23,11 +23,37 @@ function initDb() {
     if (!fs.existsSync(SKILLS_DIR)) {
         fs.mkdirSync(SKILLS_DIR, { recursive: true });
     }
+
+    // Check if migration is needed
+    if (fs.existsSync(SKILLS_DB)) {
+        try {
+            const columns = execSync(`sqlite3 ${SKILLS_DB} "PRAGMA table_info(active_skills)"`).toString();
+            if (columns.includes('image_build_time')) {
+                console.log(`\x1b[36m[Skill] Migrating database to new schema...\x1b[0m`);
+                const migrationSql = `
+                    BEGIN TRANSACTION;
+                    ALTER TABLE active_skills RENAME TO active_skills_old;
+                    CREATE TABLE active_skills (
+                        container_name TEXT PRIMARY KEY,
+                        image_id TEXT,
+                        skill_path TEXT
+                    );
+                    INSERT INTO active_skills (container_name, image_id, skill_path)
+                    SELECT container_name, 'reinstall-required', skill_path FROM active_skills_old;
+                    DROP TABLE active_skills_old;
+                    COMMIT;
+                `;
+                execSync(`sqlite3 ${SKILLS_DB} "${migrationSql}"`);
+            }
+        } catch (e) {
+            // Table might not exist yet or other error, move to standard init
+        }
+    }
+
     const schema = `
         CREATE TABLE IF NOT EXISTS active_skills (
             container_name TEXT PRIMARY KEY,
-            image_build_time TEXT,
-            activation_time TEXT,
+            image_id TEXT,
             skill_path TEXT
         );
     `;
@@ -84,7 +110,7 @@ async function main() {
 
 async function listSkills(name) {
     try {
-        let query = "SELECT container_name, image_build_time, activation_time, skill_path FROM active_skills";
+        let query = "SELECT container_name, image_id, skill_path FROM active_skills";
         if (name) {
             query += ` WHERE container_name = '${name}'`;
         }
@@ -137,31 +163,28 @@ async function scanSkill(name) {
                 continue;
             }
 
-            // 2. Get current image build time
+            // 2. Get current image ID
             const imageName = sh(`docker inspect ${target} --format '{{.Config.Image}}'`, { failSilently: true }) || target;
-            const buildTimeRaw = sh(`docker inspect ${imageName} --format '{{.Created}}'`, { failSilently: true });
+            const currentImageId = sh(`docker inspect ${imageName} --format '{{.Id}}'`, { failSilently: true });
 
-            if (!buildTimeRaw) {
-                console.log(`\x1b[31m[Skill] Result: ERROR (Could not retrieve build time).\x1b[0m`);
+            if (!currentImageId) {
+                console.log(`\x1b[31m[Skill] Result: ERROR (Could not retrieve image ID).\x1b[0m`);
                 continue;
             }
-            const currentBuildTime = new Date(buildTimeRaw);
 
             // 3. Query registration info
-            const query = `SELECT activation_time FROM active_skills WHERE container_name = '${target}';`;
-            const activationTimeStr = sh(`sqlite3 ${SKILLS_DB} "${query}"`, { failSilently: true });
+            const query = `SELECT image_id FROM active_skills WHERE container_name = '${target}';`;
+            const registeredImageId = sh(`sqlite3 ${SKILLS_DB} "${query}"`, { failSilently: true });
 
-            if (!activationTimeStr) {
+            if (!registeredImageId) {
                 console.log(`\x1b[33m[Skill] Status: NOT REGISTERED. ("skill install ${target}")\x1b[0m`);
                 continue;
             }
 
-            const activationTime = new Date(activationTimeStr);
-
-            // 4. Compare timestamps
-            if (currentBuildTime > activationTime) {
-                console.log(`\x1b[31m[Skill] Status: EXPIRED. (Re-activation required)\x1b[0m`);
-                console.log(`        Reg At: ${activationTime.toISOString().replace(/\.\d+Z$/, 'Z')} | Current: ${currentBuildTime.toISOString().replace(/\.\d+Z$/, 'Z')}`);
+            // 4. Compare image IDs
+            if (currentImageId !== registeredImageId) {
+                console.log(`\x1b[31m[Skill] Status: EXPIRED. (Image ID changed, re-activation required)\x1b[0m`);
+                console.log(`        Reg At: ${registeredImageId.substring(0, 19)}... | Current: ${currentImageId.substring(0, 19)}...`);
             } else {
                 console.log(`\x1b[32m[Skill] Status: UP TO DATE.\x1b[0m`);
             }
@@ -174,7 +197,7 @@ async function scanSkill(name) {
 }
 async function statusSkills() {
     try {
-        const query = "SELECT container_name, activation_time FROM active_skills;";
+        const query = "SELECT container_name, image_id FROM active_skills;";
         const rawRows = sh(`sqlite3 ${SKILLS_DB} "${query}"`, { failSilently: true });
 
         if (!rawRows) {
@@ -183,8 +206,8 @@ async function statusSkills() {
         }
 
         const rows = rawRows.split('\n').filter(l => l.trim()).map(line => {
-            const [name, activationTime] = line.split('|');
-            return { name, activationTime: new Date(activationTime) };
+            const [name, imageId] = line.split('|');
+            return { name, imageId };
         });
 
         const pad = (str, len) => str.padEnd(len).substring(0, len);
@@ -201,13 +224,9 @@ async function statusSkills() {
             const isRunning = runningRaw === 'true';
 
             // 2. Check if expired
-            let isUpToDate = false;
             const imageName = sh(`docker inspect ${name} --format '{{.Config.Image}}'`, { failSilently: true }) || name;
-            const buildTimeRaw = sh(`docker inspect ${imageName} --format '{{.Created}}'`, { failSilently: true });
-            if (buildTimeRaw) {
-                const currentBuildTime = new Date(buildTimeRaw);
-                isUpToDate = currentBuildTime <= activationTime;
-            }
+            const currentImageId = sh(`docker inspect ${imageName} --format '{{.Id}}'`, { failSilently: true });
+            const isUpToDate = currentImageId === row.imageId;
 
             // 3. Check if file exists
             const filePath = path.join(SKILLS_DIR, name, 'SKILL.md');
@@ -267,19 +286,15 @@ async function installSkill(name) {
 
         // 4. Gather metadata
         console.log(`\x1b[36m[Skill] Retrieving image metadata...\x1b[0m`);
-        const activationTime = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-        let buildTime = 'Unknown';
-
         const imageName = sh(`docker inspect ${name} --format '{{.Config.Image}}'`, { failSilently: true })
             || `pi-mono-stack-${name}`;
 
-        const buildTimeRaw = sh(`docker inspect ${imageName} --format '{{.Created}}'`, { failSilently: true });
-        if (buildTimeRaw) buildTime = new Date(buildTimeRaw).toISOString().replace(/\.\d+Z$/, 'Z');
+        const imageId = sh(`docker inspect ${imageName} --format '{{.Id}}'`, { failSilently: true }) || 'unknown';
 
-        // 5. Update Registration (SQLite & ACTIVE.md)
+        // 5. Update Registration
         console.log(`\x1b[36m[Skill] Updating registration data...\x1b[0m`);
         const skillPath = `skills/${name}/SKILL.md`;
-        const sql = `INSERT OR REPLACE INTO active_skills (container_name, image_build_time, activation_time, skill_path) VALUES ('${name}', '${buildTime}', '${activationTime}', '${skillPath}');`;
+        const sql = `INSERT OR REPLACE INTO active_skills (container_name, image_id, skill_path) VALUES ('${name}', '${imageId}', '${skillPath}');`;
 
         execSync(`sqlite3 ${SKILLS_DB} "${sql}"`);
 
