@@ -126,14 +126,16 @@ services:
     network_mode: host
     restart: unless-stopped
 
-  github:
+  swe:
     build:
-      context: github
+      context: swe
       dockerfile: Dockerfile
       network: host
-    container_name: github
+    image: pi-mono-stack-swe:latest
+    container_name: swe
     environment:
       - GITHUB_TOKEN
+      - DKRON_URL=http://127.0.0.1:18047/v1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw

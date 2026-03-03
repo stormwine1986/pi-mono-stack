@@ -1,7 +1,7 @@
 FROM alpine:latest
 
-# Install github-cli, git, bash and other dependencies
-RUN apk add --no-cache github-cli bash git docker-cli
+# Install github-cli, git, bash and other dependencies (SWE module)
+RUN apk add --no-cache github-cli bash git docker-cli curl
 
 # Create pi-mono user and group with UID/GID 1000
 RUN addgroup -g 1000 pi-mono && \
@@ -15,7 +15,7 @@ RUN chown -R pi-mono:pi-mono /home/pi-mono
 
 WORKDIR /home/pi-mono
 
-# Copy the github skill files
+# Copy the SWE skill files
 COPY . /app
 RUN chown -R pi-mono:pi-mono /app
 RUN chmod +x /app/scripts/entrypoint.sh
