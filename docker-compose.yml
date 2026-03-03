@@ -1,3 +1,4 @@
+name: pi-mono-stack
 services:
   redis:
     image: falkordb/falkordb:edge-alpine
@@ -19,7 +20,8 @@ services:
     container_name: agent
     network_mode: host
     depends_on:
-      - redis
+      redis:
+        condition: service_started
     environment:
       - REDIS_URL=redis://127.0.0.1:6379
       - DKRON_URL=http://127.0.0.1:18047/v1
@@ -40,7 +42,10 @@ services:
       network: host
     container_name: gateway
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      dkron:
+        condition: service_healthy
     restart: unless-stopped
     network_mode: host
     volumes:
@@ -96,6 +101,12 @@ services:
     restart: unless-stopped
     depends_on:
       - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:18047/v1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   browser-use:
     build:
@@ -112,6 +123,9 @@ services:
       role: Tools
     network_mode: host
     restart: unless-stopped
+    depends_on:
+      dkron:
+        condition: service_healthy
 
   tavily:
     build:
@@ -143,6 +157,9 @@ services:
       role: Tools
     network_mode: host
     restart: unless-stopped
+    depends_on:
+      dkron:
+        condition: service_healthy
 
   wikipedia:
     build:
@@ -185,8 +202,10 @@ services:
     network_mode: host
     restart: unless-stopped
     depends_on:
-      - redis
-      - dkron
+      redis:
+        condition: service_started
+      dkron:
+        condition: service_healthy
 
 volumes:
   redis_data:

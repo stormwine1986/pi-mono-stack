@@ -26,11 +26,17 @@ COPY --from=builder /app/dkron-executor-reminder /usr/local/bin/
 RUN chmod +x /usr/local/bin/dkron-executor-background
 RUN chmod +x /usr/local/bin/dkron-executor-reminder
 
-# Install dependencies: curl, docker-cli, redis
-RUN apk add --no-cache curl docker-cli redis
+# Install dependencies: curl, docker-cli, redis, jq
+RUN apk add --no-cache curl docker-cli redis jq
+
+# Copy scripts
+COPY scripts/monitor_jobs.sh /usr/local/bin/
+COPY scripts/entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/monitor_jobs.sh /usr/local/bin/entrypoint.sh
 
 # Set Environment Variables
 ENV GODEBUG=netdns=go
 
-# Set Entrypoint Command
+# Set Entrypoint and Command
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["agent", "--server", "--log-level=info", "--bootstrap-expect=1"]
