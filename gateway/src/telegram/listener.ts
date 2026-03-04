@@ -187,6 +187,18 @@ async function processMessage(
 
     logger.info(`Processing message ${id}: ${rawMessage}`);
 
+    // Check global TG switch before sending
+    try {
+        const enabled = await redis.get(config.tgEnabledKey);
+        if (enabled === '0' || enabled === 'false') {
+            logger.warn(`TG Bot is disabled via Redis switch. Skipping delivery of message ${id}.`);
+            await redis.xack(stream, group, id);
+            return;
+        }
+    } catch (err) {
+        logger.error(`Error checking TG switch from Redis: ${err}`);
+    }
+
     const maxRetries = 3;
     let attempt = 0;
     let success = false;

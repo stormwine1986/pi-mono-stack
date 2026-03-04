@@ -13,6 +13,18 @@ export function registerHandlers(bot: Telegraf, redisProducer: Redis) {
     // Middleware for authorization
     bot.use(async (ctx, next) => {
         const userId = ctx.from?.id;
+
+        // Check global TG switch if configured
+        try {
+            const enabled = await redisProducer.get(config.tgEnabledKey);
+            if (enabled === '0' || enabled === 'false') {
+                logger.warn(`TG Bot is disabled via Redis switch (${config.tgEnabledKey})`);
+                return;
+            }
+        } catch (err) {
+            logger.error(`Error checking TG switch from Redis: ${err}`);
+        }
+
         if (config.adminId && userId && userId !== config.adminId) {
             logger.warn(`Unauthorized access attempt from user ID: ${userId} (${ctx.from?.username})`);
             return;

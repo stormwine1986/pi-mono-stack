@@ -59,6 +59,15 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
         .status-online { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
         .status-offline { background: #f44336; }
         
+        /* TG Toggle Switch */
+        .tg-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 0.9em; background: #fff; padding: 5px 12px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #ddd; }
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #2196f3; }
+        input:checked + .slider:before { transform: translateX(20px); }
+        
         /* Memory Events Sidebar */
         #memory-sidebar { display: flex; flex-direction: column; min-height: 0; }
         #memory-events { flex-grow: 1; border: 1px solid #ddd; padding: 12px; background: #fff; border-radius: 8px; overflow-y: auto; font-size: 0.85em; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
@@ -74,7 +83,16 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
 </head>
 <body>
     <div class="container">
-        <h2><span id="status-dot" class="status-dot status-offline"></span>Agent Gateway Test UI</h2>
+        <header style="display: flex; align-items: center; margin-bottom: 5px; flex-shrink: 0;">
+            <h2 style="margin: 0;"><span id="status-dot" class="status-dot status-offline"></span>Agent Gateway Test UI</h2>
+            <div class="tg-controls">
+                <span>Telegram Bot</span>
+                <label class="switch">
+                    <input type="checkbox" id="tg-switch" onchange="toggleTG()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </header>
         
         <div class="layout">
             <div class="chat-column">
@@ -98,10 +116,37 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
         const memoryDiv = document.getElementById('memory-events');
         const promptInput = document.getElementById('prompt');
         const userIdInput = document.getElementById('user-id');
+        const tgSwitch = document.getElementById('tg-switch');
         const statusDot = document.getElementById('status-dot');
 
         // Load persisted User ID
         userIdInput.value = localStorage.getItem('gate_user_id') || 'test-user';
+
+        async function fetchTGStatus() {
+            try {
+                const res = await fetch('/api/tg-status');
+                const data = await res.json();
+                tgSwitch.checked = data.enabled;
+            } catch (err) {
+                console.error('Failed to fetch TG status:', err);
+            }
+        }
+
+        async function toggleTG() {
+            const enabled = tgSwitch.checked;
+            try {
+                await fetch('/api/tg-toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+            } catch (err) {
+                alert('Failed to toggle TG: ' + err.message);
+                tgSwitch.checked = !enabled;
+            }
+        }
+
+        fetchTGStatus();
 
         function appendMemoryEvent(event) {
             const div = document.createElement('div');
@@ -225,6 +270,28 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
         } catch (err) {
             logger.error(`[WebUI] Failed to push task: ${err}`);
             res.status(500).json({ error: 'Failed to push to Redis' });
+        }
+    });
+
+    // API: Get Telegram Enable Status
+    app.get('/api/tg-status', async (req, res) => {
+        try {
+            const val = await redisProducer.get(config.tgEnabledKey);
+            res.json({ enabled: val !== '0' && val !== 'false' });
+        } catch (err) {
+            res.status(500).json({ error: 'Redis error' });
+        }
+    });
+
+    // API: Toggle Telegram Enable Status
+    app.post('/api/tg-toggle', async (req, res) => {
+        const { enabled } = req.body;
+        try {
+            await redisProducer.set(config.tgEnabledKey, enabled ? '1' : '0');
+            logger.info(`[WebUI] Telegram Bot ${enabled ? 'ENABLED' : 'DISABLED'} via WebUI`);
+            res.json({ status: 'ok' });
+        } catch (err) {
+            res.status(500).json({ error: 'Redis error' });
         }
     });
 
