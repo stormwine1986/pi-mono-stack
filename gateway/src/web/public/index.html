@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Gateway Test UI</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header style="display: flex; align-items: center; margin-bottom: 5px; flex-shrink: 0;">
+            <h2 style="margin: 0;"><span id="status-dot" class="status-dot status-offline"></span>Agent Gateway Test UI
+            </h2>
+            <div class="tg-controls">
+                <span>Telegram Bot</span>
+                <label class="switch">
+                    <input type="checkbox" id="tg-switch" onchange="toggleTG()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </header>
+
+        <div class="layout">
+            <div class="chat-column">
+                <div id="messages"></div>
+                <div class="input-area">
+                    <input type="text" id="user-id" placeholder="User ID"
+                        onchange="localStorage.setItem('gate_user_id', this.value)">
+                    <input type="text" id="prompt" placeholder="Type a message to agent_in..."
+                        onkeypress="if(event.key === 'Enter') send()">
+                    <button onclick="send()" id="send-btn">Send</button>
+                    <button onclick="resetSession()" id="reset-btn" style="background: #f44336;">Reset</button>
+                </div>
+            </div>
+
+            <div id="memory-sidebar">
+                <div id="memory-events-container"
+                    style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+                    <h3>Latest Memory Events</h3>
+                    <div id="memory-events"></div>
+                </div>
+
+                <div id="dkron-jobs">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
+                        <h3 style="margin: 0; border: none; padding: 0;">Dkron Scheduled Jobs</h3>
+                        <div class="tg-controls" style="margin-left: 0; font-size: 0.8em; padding: 3px 10px;">
+                            <span>Only Failed</span>
+                            <label class="switch" style="width: 34px; height: 18px;">
+                                <input type="checkbox" id="failed-only-switch" checked onchange="fetchDkronJobs()">
+                                <span class="slider" style="border-radius: 18px;"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="job-list" id="job-list-content">
+                        <div style="padding: 20px; text-align: center; color: #999;">Loading jobs...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+
+</html>

@@ -16,6 +16,9 @@ COPY tsconfig.json ./
 # 构建
 RUN npm run build
 
+# tsc 不会拷贝非 .ts 文件，手动拷贝前端静态资源到编译输出
+RUN cp -r src/web/public dist/web/public
+
 # Runtime stage
 FROM node:20-slim AS runner
 

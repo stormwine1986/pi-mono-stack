@@ -14,7 +14,7 @@ import { startSummaryListener } from './summary.js';
 import { setupAllJobs } from './dkron/setup.js';
 import { registerHandlers } from './telegram/handlers.js';
 import { logger } from './logger.js';
-import { startWebServer } from './web.js';
+import { startWebServer } from './web/server.js';
 
 const bot = new Telegraf(config.telegramToken, {
     telegram: {
