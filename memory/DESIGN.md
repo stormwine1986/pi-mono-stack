@@ -13,14 +13,16 @@
 
 ### 2.1 模块构成
 1.  **Redis Stream Observer (被动感知层)**：监听 `agent_in` 与 `agent_out` 流。提取完整的“问-答”对，并过滤掉内部（internal）任务。
-2.  **Mem0 Worker (异步处理层)**：基于单线程串行处理（Serial Writing），确保本地数据库操作的排他性与稳定性。
-3.  **Local AI Engine (推理层)**：
-    *   **LLM (18080)**: 用于 Mem0 的 AUDN (Atomic User Dialogue Network) 状态机，负责从对话中提取原子事实。
-    *   **Embedding (18081)**: 提供 512 维度的向量化能力，并开启 `--pooling mean` 以兼容 OpenAI 协议。
+2.  **Mem0 Worker (异步处理层)**：基于单线程串行处理 (Serial Writing)，确保本地数据库操作的排他性。
+3.  **Memory Auditor (可观测性层)**：
+    *   **Audit Logging**: 记录 `ADD/UPDATE/DELETE` 事件到 `/data/daily/memory_audit_yyyyMMdd.jsonl`。
+    *   **Event Stream**: 同步发布变更到 Redis Stream `memory_audit`。
 4.  **Storage (持久化层)**：
-    *   **ChromaDB**: 本地持久化向量数据库，在高并发数据卷挂载环境下具有更好的稳定性。
+    *   **ChromaDB**: 本地持久化向量数据库。
     *   **SQLite**: 存储记忆的变更历史 (History Store)。
-5.  **HTTP API & CLI (检索接入层)**：为 Agent 提供主动回溯记忆的接口。
+5.  **HTTP API & CLI (检索与审计接入层)**：
+    *   源码位于 `scripts/` 目录下。
+    *   提供 `/search`, `/memories` 和 `/history` 接口。
 
 ---
 
@@ -51,7 +53,7 @@
 1.  **采集**: Observer 缓存 `agent_in` 中的 Prompt。
 2.  **触发**: 当 `agent_out` 出现 `status: success` 时，获取 Response。
 3.  **提取**: 将 Prompt + Response 发给本地 LLM 转换为原子事实（如 "用户喜欢喝不加糖的拿铁"）。
-4.  **存储**: 事实被向量化并存入 ChromaDB，同时在 SQLite 记录一条 `ADD` 日志。
+4.  **存储**: 事实被向量化并存入 ChromaDB，同时触发 **Auditor** 记录 `ADD/UPDATE/DELETE` 审计日志并推送到 Redis Stream。
 
 ### 4.2 记忆的主动检索 (Retrieval)
 1.  **决策**: Agent 在思考阶段发现需要背景信息。
@@ -68,10 +70,13 @@
     - 入参: `{ query: string, user_id: string, agent_id?: string, limit?: number }`
 - `GET /memories`: 按用户拉取全量记忆列表。
     - 入参: `?user_id=xxx`
+- `GET /history`: 查看记忆审计历史。
+    - 入参: `?user_id=xxx&limit=20` (user_id 可选)
 
 ### 5.2 CLI 工具 (`/home/pi-mono/.pi/agent/bin/memory`)
 - `memory search --user_id=7722403902 "我的咖啡偏好"`
 - `memory list --user_id=7722403902`
+- `memory history --user_id=7722403902 --limit=10`
 
 ---
 

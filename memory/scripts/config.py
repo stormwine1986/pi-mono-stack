@@ -9,9 +9,11 @@ class Config:
     # Redis Channels & Streams
     AGENT_IN_STREAM = "agent_in"
     AGENT_OUT_STREAM = "agent_out"
+    AUDIT_STREAM = "memory_audit"
     
     # Persistence
     HISTORY_DB_PATH = "/data/mem0_history.db"
+    AUDIT_LOG_DIR = "/data/daily"
     
     # Embedding Dimensions
     EMBEDDING_DIMS = 2560

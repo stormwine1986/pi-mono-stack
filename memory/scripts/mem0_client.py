@@ -59,7 +59,17 @@ class MemoryClient:
             {"role": "user", "content": prompt},
             {"role": "assistant", "content": response}
         ]
-        return self.memory.add(messages, user_id=user_id, metadata={"source_agent_id": agent_id})
+        from audit import auditor
+        result = self.memory.add(messages, user_id=user_id, metadata={"source_agent_id": agent_id})
+        
+        # Audit the results
+        if isinstance(result, dict) and "results" in result:
+            auditor.record_interaction_results(
+                user_id=user_id, 
+                results=result["results"],
+                source_metadata={"agent_id": agent_id, "prompt_preview": prompt[:100]}
+            )
+        return result
 
     def search(self, query, user_id, agent_id=None, limit=5):
         """Searches for memories."""

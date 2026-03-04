@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+import os
+import json
 from pydantic import BaseModel
 from typing import Optional, List
 from mem0_client import memory_client
@@ -101,6 +103,34 @@ async def get_memories(user_id: str):
         import traceback
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/history")
+async def get_history(user_id: Optional[str] = None, limit: int = 20):
+    """Returns the last N events from the daily audit logs, optionally filtered by user_id."""
+    try:
+        events = []
+        if os.path.exists(config.AUDIT_LOG_DIR):
+            # List files in AUDIT_LOG_DIR and sort them by name descending (latest first)
+            log_files = sorted(
+                [f for f in os.listdir(config.AUDIT_LOG_DIR) if f.startswith("memory_audit_") and f.endswith(".jsonl")],
+                reverse=True
+            )
+
+            for log_file in log_files:
+                log_path = os.path.join(config.AUDIT_LOG_DIR, log_file)
+                with open(log_path, "r") as f:
+                    lines = f.readlines()
+                    for line in reversed(lines):
+                        event = json.loads(line)
+                        if user_id and event.get("user_id") != user_id:
+                            continue
+                        events.append(event)
+                        if len(events) >= limit:
+                            return {"events": events}
+        return {"events": events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -10,6 +10,9 @@ show_help() {
     echo "Actions:"
     echo "  search --user_id=<id> <query>  检索相关记忆"
     echo "  list --user_id=<id>            获取用户所有记忆"
+    echo "  history [options]              查看记忆审计历史"
+    echo "      --user_id=<id>             (可选) 按用户过滤"
+    echo "      --limit=<n>                (可选) 返回条数，默认 20"
 }
 
 if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -43,6 +46,20 @@ case "$1" in
     done
     if [ -z "$USER_ID" ]; then echo "Error: --user_id is required"; exit 1; fi
     curl -s "${MEMORY_URL}/memories?user_id=${USER_ID}"
+    ;;
+  history)
+    shift
+    USER_ID=""; LIMIT=20
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --user_id=*)  USER_ID="${1#*=}"; shift ;;
+        --limit=*)    LIMIT="${1#*=}"; shift ;;
+        *) shift ;;
+      esac
+    done
+    URL="${MEMORY_URL}/history?limit=${LIMIT}"
+    if [ -n "$USER_ID" ]; then URL="${URL}&user_id=${USER_ID}"; fi
+    curl -s "${URL}"
     ;;
   *)
     show_help

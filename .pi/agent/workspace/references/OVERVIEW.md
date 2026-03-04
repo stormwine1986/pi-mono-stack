@@ -14,7 +14,7 @@ named with `litellm`, serves as the Compute Pool Container managed many compute 
 
 **Memory Container**
 named with `memory`, hosting the agent's memory, acting as the engine for memory management such as organize and search.
-you can use `memory` command to recall your memory.
+you can use `memory` command to recall your memory (search/list/history).
 
 **Tools Container**
 labeled by `tools`,serves as a tool, where the /app directory houses skill-specific tools, the execution environment, and the `SKILL.md` instruction file.
