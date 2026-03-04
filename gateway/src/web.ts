@@ -78,7 +78,20 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
         .mem-time { font-size: 0.8em; color: #888; display: block; margin-bottom: 4px; }
         .mem-fact { font-weight: 500; display: block; margin-top: 3px; color: #333; line-height: 1.4; }
         .mem-user { font-weight: bold; color: #673ab7; }
+        h2 { margin: 0 0 15px 0; display: flex; align-items: center; flex-shrink: 0; }
         h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; color: #333; font-size: 1.1em; flex-shrink: 0; }
+
+        /* Dkron Jobs List */
+        #dkron-jobs { margin-top: 20px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 200px; }
+        .job-list { border: 1px solid #ddd; background: #fff; border-radius: 8px; overflow-y: auto; max-height: 300px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .job-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; gap: 4px; }
+        .job-header { display: flex; justify-content: space-between; align-items: center; }
+        .job-name { font-weight: bold; color: #333; }
+        .job-status { font-size: 0.8em; padding: 2px 8px; border-radius: 10px; }
+        .status-success { background: #e8f5e9; color: #2e7d32; }
+        .status-failed { background: #ffebee; color: #c62828; }
+        .status-running { background: #e3f2fd; color: #1565c0; }
+        .job-meta { font-size: 0.8em; color: #666; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
@@ -105,8 +118,17 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
             </div>
             
             <div id="memory-sidebar">
-                <h3>Latest Memory Events</h3>
-                <div id="memory-events"></div>
+                <div id="memory-events-container" style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+                    <h3>Latest Memory Events</h3>
+                    <div id="memory-events"></div>
+                </div>
+                
+                <div id="dkron-jobs">
+                    <h3>Dkron Scheduled Jobs</h3>
+                    <div class="job-list" id="job-list-content">
+                        <div style="padding: 20px; text-align: center; color: #999;">Loading jobs...</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -121,6 +143,52 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
 
         // Load persisted User ID
         userIdInput.value = localStorage.getItem('gate_user_id') || 'test-user';
+
+        async function fetchDkronJobs() {
+            try {
+                const res = await fetch('/api/jobs');
+                const jobs = await res.json();
+                const container = document.getElementById('job-list-content');
+                
+                if (!jobs || jobs.length === 0) {
+                    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No jobs found</div>';
+                    return;
+                }
+
+                container.innerHTML = jobs.map(job => {
+                    let lastStatus = 'unknown';
+                    // Determine status: if it has run, was the last success equal or after the last run?
+                    if (job.last_run) {
+                        if (job.last_success && new Date(job.last_success) >= new Date(job.last_run)) {
+                            lastStatus = 'success';
+                        } else {
+                            lastStatus = 'failed';
+                        }
+                    } else if (job.last_success) {
+                        lastStatus = 'success';
+                    }
+                    
+                    const statusClass = 'status-' + lastStatus;
+                    const lastRun = job.last_run ? new Date(job.last_run).toLocaleString() : 
+                                   (job.last_success ? 'Success at ' + new Date(job.last_success).toLocaleString() : 'Never');
+                    
+                    return \`
+                        <div class="job-item">
+                            <div class="job-header">
+                                <span class="job-name">\${job.name}</span>
+                                <span class="job-status \${statusClass}">\${lastStatus.toUpperCase()}</span>
+                            </div>
+                            <div class="job-meta">
+                                <span>Owner: \${job.owner}</span>
+                                <span>Last run: \${lastRun}</span>
+                            </div>
+                        </div>
+                    \`;
+                }).join('');
+            } catch (err) {
+                console.error('Failed to fetch Dkron jobs:', err);
+            }
+        }
 
         async function fetchTGStatus() {
             try {
@@ -147,6 +215,8 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
         }
 
         fetchTGStatus();
+        fetchDkronJobs();
+        setInterval(fetchDkronJobs, 30000); // Refresh every 30s
 
         function appendMemoryEvent(event) {
             const div = document.createElement('div');
@@ -292,6 +362,19 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
             res.json({ status: 'ok' });
         } catch (err) {
             res.status(500).json({ error: 'Redis error' });
+        }
+    });
+
+    // API: Get Dkron Jobs
+    app.get('/api/jobs', async (req, res) => {
+        try {
+            const response = await fetch(`${config.dkronUrl}/jobs`);
+            if (!response.ok) throw new Error(`Dkron error: ${response.status}`);
+            const data = await response.json();
+            res.json(data);
+        } catch (err) {
+            logger.error(`[WebUI] Failed to fetch jobs from Dkron: ${err}`);
+            res.status(500).json({ error: 'Failed to fetch from Dkron' });
         }
     });
 
