@@ -21,6 +21,7 @@ Gateway 模块作为系统对外的唯一接入点，负责外部消息（如 Te
 ```json
 {
   "id": "string",            // 任务唯一标识 (nanoId)
+  "user_id": "string",       // 任务所属用户标识 (如 TG chat id)
   "source": "string",        // 请求来源 ("telegram", "dkron")
   "prompt": "string",        // 用户提示词或命令文本
   "metadata": {              // 来源相关的路由信息
@@ -41,6 +42,9 @@ Gateway 模块作为系统对外的唯一接入点，负责外部消息（如 Te
 ```json
 {
   "id": "string",            // 对应输入流的任务 ID
+  "user_id": "string",       // 对应输入流的用户标识
+  "source": "string",        // 对应请求的来源 ("telegram", "dkron")
+  "agent_id": "string",      // 执行任务的 Agent 标识
   "status": "success" | "error" | "progress",
   "response": "string",      // 最终文本回复 (仅当 status 为 success 时)
   "error": "string",         // 错误消息 (仅当 status 为 error 时)
@@ -62,6 +66,8 @@ Gateway 模块作为系统对外的唯一接入点，负责外部消息（如 Te
 ```json
 {
   "id": "string",            // (可选) 目标任务 ID
+  "user_id": "string",       // 触发控制指令的用户标识
+  "source": "string",        // 控制指令来源
   "command": "stop" | "steer" | "reset",
   "message": "string"        // (可选) 具体的指令或补充信息
 }

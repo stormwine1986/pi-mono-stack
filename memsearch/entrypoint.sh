@@ -10,26 +10,16 @@ echo "
 |_|  |_|______|_|  |_|_____/|______/_/    \_\_|  \_\\_____|_|  |_|
 "
 
-# Ensure the config directory exists
-mkdir -p /home/pi-mono/.memsearch
-
-echo "System Information:"
+echo "Memory Service Environment Information:"
 echo "-------------------"
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    echo "Linux Version: $PRETTY_NAME"
-else
-    echo "Linux Version: $(uname -sr)"
-fi
-
 echo "Python Version: $(python3 --version 2>&1)"
-echo "Memsearch Version: $(pip show memsearch | grep Version | awk '{print $2}')"
+echo "REDIS_URL: $REDIS_URL"
+echo "LLAMA_SERVER_URL: $LLAMA_SERVER_URL"
+echo "LLAMA_EMBEDDING_URL: $LLAMA_EMBEDDING_URL"
 echo "-------------------"
 
-# Index memory directory on startup
-echo "Indexing memory directory..."
-memsearch index /home/pi-mono/.pi/agent/workspace/memory/
+# Ensure data directory has correct permissions (handled by Dockerfile but just in case)
+# mkdir -p /data
 
-# Keep container alive
-echo "Memsearch is ready."
-tail -f /dev/null
+echo "Launching Pi Memory Service (Observer + API)..."
+python3 /app/main.py

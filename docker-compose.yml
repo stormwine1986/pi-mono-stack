@@ -25,6 +25,7 @@ services:
     environment:
       - REDIS_URL=redis://127.0.0.1:6379
       - DKRON_URL=http://127.0.0.1:18047/v1
+      - AGENT_ID=0
       - RCLONE_CONFIG_S3_TYPE=s3
       - RCLONE_CONFIG_S3_PROVIDER=Other
       - RCLONE_CONFIG_S3_ACCESS_KEY_ID
@@ -78,14 +79,26 @@ services:
       network: host
     container_name: memsearch
     environment:
-      - VOYAGE_API_KEY
       - REDIS_URL=redis://127.0.0.1:6379
+      - LLAMA_SERVER_URL=http://127.0.0.1:18080/v1
+      - LLAMA_EMBEDDING_URL=http://127.0.0.1:18081/v1
+      - MEM_API_PORT=18090
     volumes:
       - ./.pi:/home/pi-mono/.pi
-      - ./.pi/agent/memsearch.config.toml:/home/pi-mono/.memsearch/config.toml
+      - ./.pi/agent/workspace/.memsearch:/data
     network_mode: host
     restart: unless-stopped
-
+    depends_on:
+      - redis
+      - llama-server
+      - llama-embedding
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:18090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+      
   dkron:
     build:
       context: dkron
@@ -225,6 +238,31 @@ services:
       --n-gpu-layers 99
       --cache-type-k q8_0
       --cache-type-v q8_0
+      --metrics
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    network_mode: host
+    restart: unless-stopped
+
+  llama-embedding:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-embedding
+    volumes:
+      - ./.pi/agent/workspace/.swe/download:/models
+    command: >
+      -m /models/qwen3_embedding_4b_q8_0/unsloth.Q8_0.gguf
+      --port 18081
+      --host 0.0.0.0
+      --embedding
+      --pooling mean
+      -c 512
+      -np 1
+      --n-gpu-layers 99
       --metrics
     deploy:
       resources:

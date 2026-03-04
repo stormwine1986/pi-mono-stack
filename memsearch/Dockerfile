@@ -2,32 +2,46 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装基础依赖
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 直接从 PyPI 安装 memsearch 及其常用扩展
+# Install Mem0 and its dependencies
+# Including fastapi, uvicorn, redis for the memory service
 RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
-    pip install --no-cache-dir "memsearch" "memsearch[google]" "memsearch[voyage]"
+    pip install --no-cache-dir \
+    "mem0ai" \
+    "chromadb" \
+    "redis" \
+    "openai" \
+    "fastapi" \
+    "uvicorn" \
+    "python-multipart"
 
-# 创建 pi-mono 用户和组 (1000:1000)
+# Create pi-mono user and group (1000:1000)
 RUN groupadd -g 1000 pi-mono && \
     useradd -u 1000 -g pi-mono -m -s /bin/bash pi-mono
 
-# 复制脚本 (由 root 执行)
+# Copy scripts and source code
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY config.py /usr/local/bin/config.py
+COPY config.py /app/config.py
+COPY mem0_client.py /app/mem0_client.py
+COPY observer.py /app/observer.py
+COPY worker.py /app/worker.py
+COPY api.py /app/api.py
+COPY main.py /app/main.py
+
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# 切换到 pi-mono 用户
+# Data directory for Milvus and SQLite
+RUN mkdir -p /data && chown -R pi-mono:pi-mono /data
+
+# Switch to pi-mono user
 USER pi-mono
 WORKDIR /home/pi-mono
 ENV HOME=/home/pi-mono
+ENV PYTHONPATH=/app
 
-# 创建工作区中的数据存储目录 (由 pi-mono 执行)
-RUN mkdir -p /home/pi-mono/.memsearch
-
-
-# 使用 entrypoint 脚本
+# Use entrypoint script
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

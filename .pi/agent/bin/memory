@@ -1,0 +1,52 @@
+#!/bin/bash
+# .pi/agent/bin/memory
+# 记忆系统 CLI —— 供 Agent 调用
+
+MEMSEARCH_URL="${MEMSEARCH_URL:-http://127.0.0.1:18090}"
+
+show_help() {
+    echo "Usage: memory <search|list> [options] [query]"
+    echo ""
+    echo "Actions:"
+    echo "  search --user_id=<id> [--agent_id=<id>] <query>  检索相关记忆"
+    echo "  list --user_id=<id>                            获取用户所有记忆"
+}
+
+if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+    exit 0
+fi
+
+case "$1" in
+  search)
+    shift
+    AGENT_ID=""; USER_ID=""; QUERY=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --agent_id=*) AGENT_ID="${1#*=}"; shift ;;
+        --user_id=*)  USER_ID="${1#*=}"; shift ;;
+        *)            QUERY="$*"; break ;;
+      esac
+    done
+    if [ -z "$USER_ID" ]; then echo "Error: --user_id is required"; exit 1; fi
+    curl -s -X POST "${MEMSEARCH_URL}/search" \
+      -H "Content-Type: application/json" \
+      -d "{\"query\": \"${QUERY}\", \"user_id\": \"${USER_ID}\", \"agent_id\": \"${AGENT_ID}\"}"
+    ;;
+  list)
+    shift
+    USER_ID=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --user_id=*)  USER_ID="${1#*=}"; shift ;;
+        *) shift ;;
+      esac
+    done
+    if [ -z "$USER_ID" ]; then echo "Error: --user_id is required"; exit 1; fi
+    curl -s "${MEMSEARCH_URL}/memories?user_id=${USER_ID}"
+    ;;
+  *)
+    show_help
+    exit 1
+    ;;
+esac
