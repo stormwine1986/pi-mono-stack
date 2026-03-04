@@ -22,38 +22,105 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent Gateway Test UI</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f4f7f6; }
-        .container { display: flex; flex-direction: column; height: 90vh; }
-        #messages { flex-grow: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: white; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .message { margin-bottom: 10px; padding: 10px; border-radius: 6px; }
-        .message.sent { background: #e3f2fd; align-self: flex-end; border-left: 4px solid #2196f3; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1600px; margin: 0 auto; padding: 15px; background: #f4f7f6; height: 100vh; overflow: hidden; }
+        
+        .container { display: flex; flex-direction: column; height: 100%; }
+        h2 { margin: 0 0 15px 0; display: flex; align-items: center; flex-shrink: 0; }
+        
+        .layout { display: grid; grid-template-columns: 1fr 350px; gap: 20px; flex-grow: 1; min-height: 0; }
+        
+        .chat-column { display: flex; flex-direction: column; min-height: 0; flex-grow: 1; }
+        
+        #messages { flex-grow: 1; overflow-y: auto; border: 1px solid #ddd; padding: 15px; background: white; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        
+        /* Custom Scrollbar */
+        #messages::-webkit-scrollbar, #memory-events::-webkit-scrollbar { width: 8px; }
+        #messages::-webkit-scrollbar-track, #memory-events::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        #messages::-webkit-scrollbar-thumb, #memory-events::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        #messages::-webkit-scrollbar-thumb:hover, #memory-events::-webkit-scrollbar-thumb:hover { background: #bbb; }
+
+        .message { margin-bottom: 12px; padding: 12px; border-radius: 8px; max-width: 85%; width: fit-content; }
+        .message.sent { background: #e3f2fd; border-right: 4px solid #2196f3; margin-left: auto; }
         .message.received { background: #f5f5f5; border-left: 4px solid #4caf50; }
         .message.error { background: #ffebee; border-left: 4px solid #f44336; }
-        .message.progress { background: #fffde7; font-size: 0.9em; color: #666; font-style: italic; }
-        .input-area { display: flex; gap: 10px; }
-        input { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
-        button { padding: 10px 20px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .message.progress { background: #fffde7; font-size: 0.9em; color: #666; font-style: italic; width: 100%; max-width: 100%; }
+        
+        .input-area { display: flex; gap: 10px; flex-shrink: 0; padding-bottom: 5px; }
+        input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; outline: none; transition: border-color 0.2s; }
+        #prompt { flex-grow: 1; }
+        #user-id { width: 150px; flex-shrink: 0; }
+        input:focus { border-color: #2196f3; }
+        button { padding: 10px 24px; background: #2196f3; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s; flex-shrink: 0; }
         button:hover { background: #1976d2; }
-        pre { white-space: pre-wrap; margin: 0; }
-        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
-        .status-online { background: #4caf50; }
+        pre { white-space: pre-wrap; margin: 0; font-family: inherit; font-size: 15px; line-height: 1.5; word-break: break-all; }
+        
+        .status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; }
+        .status-online { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
         .status-offline { background: #f44336; }
+        
+        /* Memory Events Sidebar */
+        #memory-sidebar { display: flex; flex-direction: column; min-height: 0; }
+        #memory-events { flex-grow: 1; border: 1px solid #ddd; padding: 12px; background: #fff; border-radius: 8px; overflow-y: auto; font-size: 0.85em; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .mem-event { padding: 10px; border-bottom: 1px solid #eee; margin-bottom: 8px; border-left: 4px solid #673ab7; background: #f3e5f5; border-radius: 6px; }
+        .mem-event.ADD { border-left-color: #4caf50; background: #e8f5e9; }
+        .mem-event.DELETE { border-left-color: #f44336; background: #ffebee; }
+        .mem-event.UPDATE { border-left-color: #ff9800; background: #fff3e0; }
+        .mem-time { font-size: 0.8em; color: #888; display: block; margin-bottom: 4px; }
+        .mem-fact { font-weight: 500; display: block; margin-top: 3px; color: #333; line-height: 1.4; }
+        .mem-user { font-weight: bold; color: #673ab7; }
+        h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; color: #333; font-size: 1.1em; flex-shrink: 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2><span id="status-dot" class="status-dot status-offline"></span>Agent Gateway Test UI</h2>
-        <div id="messages"></div>
-        <div class="input-area">
-            <input type="text" id="prompt" placeholder="Type a message to agent_in..." onkeypress="if(event.key === 'Enter') send()">
-            <button onclick="send()" id="send-btn">Send</button>
+        
+        <div class="layout">
+            <div class="chat-column">
+                <div id="messages"></div>
+                <div class="input-area">
+                    <input type="text" id="user-id" placeholder="User ID" onchange="localStorage.setItem('gate_user_id', this.value)">
+                    <input type="text" id="prompt" placeholder="Type a message to agent_in..." onkeypress="if(event.key === 'Enter') send()">
+                    <button onclick="send()" id="send-btn">Send</button>
+                </div>
+            </div>
+            
+            <div id="memory-sidebar">
+                <h3>Latest Memory Events</h3>
+                <div id="memory-events"></div>
+            </div>
         </div>
     </div>
 
     <script>
         const messagesDiv = document.getElementById('messages');
+        const memoryDiv = document.getElementById('memory-events');
         const promptInput = document.getElementById('prompt');
+        const userIdInput = document.getElementById('user-id');
         const statusDot = document.getElementById('status-dot');
+
+        // Load persisted User ID
+        userIdInput.value = localStorage.getItem('gate_user_id') || 'test-user';
+
+        function appendMemoryEvent(event) {
+            const div = document.createElement('div');
+            div.className = 'mem-event ' + event.event;
+            
+            const time = new Date(event.timestamp).toLocaleTimeString();
+            div.innerHTML = \`
+                <span class="mem-time">\${time} · <span class="mem-user">\${event.user_id}</span></span>
+                <span class="mem-fact">\${event.fact}</span>
+                <small style="color: #666; font-size: 0.8em">\${event.event} | ID: \${event.memory_id.substring(0,8)}</small>
+            \`;
+            
+            memoryDiv.insertBefore(div, memoryDiv.firstChild);
+            
+            // Keep only latest 10
+            while (memoryDiv.children.length > 10) {
+                memoryDiv.removeChild(memoryDiv.lastChild);
+            }
+        }
 
         function appendMessage(text, type, data = null) {
             const div = document.createElement('div');
@@ -79,16 +146,17 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
 
         async function send() {
             const prompt = promptInput.value.trim();
+            const user_id = userIdInput.value.trim() || 'test-user';
             if (!prompt) return;
 
-            appendMessage('To agent_in: ' + prompt, 'sent');
+            appendMessage('[' + user_id + '] To agent_in: ' + prompt, 'sent');
             promptInput.value = '';
 
             try {
                 const res = await fetch('/api/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt, user_id: 'test-user' })
+                    body: JSON.stringify({ prompt, user_id })
                 });
                 if (!res.ok) throw new Error('Failed to send');
             } catch (err) {
@@ -114,6 +182,8 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
                     appendMessage('Error from agent_out: ' + data.error, 'error');
                 } else if (data.status === 'progress') {
                     appendMessage('Progress: ' + data.event + (data.data ? ' ' + JSON.stringify(data.data) : ''), 'progress');
+                } else if (data.event && ['ADD', 'UPDATE', 'DELETE'].includes(data.event)) {
+                    appendMemoryEvent(data);
                 }
             };
 
@@ -175,14 +245,22 @@ export function startWebServer(redisProducer: Redis, redisConsumer: Redis) {
         // For a test UI, a dedicated reader starting from '$' (now) is easiest.
         let active = true;
         const reader = async () => {
-            let lastId = '$';
+            let lastIdAgent = '$';
+            let lastIdMem = '$';
             while (active) {
                 try {
-                    const results = await (redisConsumer as any).xread('BLOCK', 5000, 'COUNT', 10, 'STREAMS', config.agent_out, lastId);
+                    const results = await (redisConsumer as any).xread(
+                        'BLOCK', 5000,
+                        'COUNT', 10,
+                        'STREAMS', config.agent_out, config.memory_audit,
+                        lastIdAgent, lastIdMem
+                    );
                     if (results) {
                         for (const [stream, messages] of results) {
                             for (const [id, fields] of messages) {
-                                lastId = id;
+                                if (stream === config.agent_out) lastIdAgent = id;
+                                if (stream === config.memory_audit) lastIdMem = id;
+
                                 const dataIndex = fields.indexOf('payload');
                                 if (dataIndex !== -1) {
                                     try {

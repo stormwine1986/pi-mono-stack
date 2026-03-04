@@ -7,6 +7,7 @@ export const config = {
     background_out: 'background_out',
     reminder_out: 'reminder_out',
     gateway_ctl: 'gateway_ctl',
+    memory_audit: 'memory_audit',
     tgConsumerGroup: 'tg-bot',
     tgConsumerName: 'bot-1',
     dkronConsumerGroup: 'gateway-dkron',

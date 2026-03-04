@@ -117,3 +117,25 @@ Gateway 模块作为系统对外的唯一接入点，负责外部消息（如 Te
 
 **格式 (键值对):**
 - `action`: `RECOVER_PENDING` (触发清理/恢复待处理消息)
+
+### 2.7 记忆审计流 (`memory_audit`)
+- **Redis 键名**: `memory_audit` (Redis Stream)
+- **保留策略**: `MAXLEN ~ 1000`
+- **流向**: Memory -> Observer/Gateway
+
+代表记忆子系统（Memory Service）中事实的生命周期变更事件，用于实现原子事实提取过程的可观测性。
+
+**格式 (JSON):** (payload 字段为 JSON 字符串)
+```json
+{
+  "timestamp": "ISO-8601",   // 事件发生时间 (UTC)
+  "event": "ADD" | "UPDATE" | "DELETE", // 变更类型
+  "user_id": "string",       // 所属用户 ID
+  "memory_id": "string",     // 记忆在向量库中的唯一标识
+  "fact": "string",          // 提取出的原子事实内容
+  "metadata": {              // 溯源元数据
+    "agent_id": "string",    // 来源 Agent ID
+    "prompt_preview": "string" // 触发此记忆提取的原始 Prompt 预览
+  }
+}
+```

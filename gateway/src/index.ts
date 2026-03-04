@@ -34,33 +34,36 @@ registerHandlers(bot, redisProducer);
 
 // Start everything
 async function main() {
+    // Start Web UI Server (Always start this)
+    startWebServer(redisProducer, redisConsumer);
+
     if (!config.telegramToken) {
-        logger.error('TELEGRAM_TOKEN is not set in environment variables');
-        process.exit(1);
+        logger.warn('TELEGRAM_TOKEN is not set in environment variables. Telegram Bot will not be launched, but Web UI is active.');
+    } else {
+        try {
+            // Register commands with Telegram
+            await bot.telegram.setMyCommands([
+                { command: 'new', description: '新建会话' },
+                { command: 'stop', description: '终止任务' },
+                { command: 'steer', description: '提供指引' },
+            ]);
+            logger.info('TG Bot commands registered');
+
+            bot.launch({
+                allowedUpdates: ['message', 'callback_query', 'photo'] as any,
+                dropPendingUpdates: false
+            });
+            logger.info('TG Bot launched successfully');
+
+            startResultListener(bot, sender, redisConsumer);
+            startReminderListener(redisProducer, redisReminderConsumer, sender);
+            startSummaryListener(redisSummaryConsumer, sender);
+        } catch (err) {
+            logger.error('Failed to start gateway bot:', err);
+        }
     }
 
     try {
-        // Register commands with Telegram
-        await bot.telegram.setMyCommands([
-            { command: 'new', description: '新建会话' },
-            { command: 'stop', description: '终止任务' },
-            { command: 'steer', description: '提供指引' },
-        ]);
-        logger.info('TG Bot commands registered');
-
-        bot.launch({
-            allowedUpdates: ['message', 'callback_query', 'photo'] as any,
-            dropPendingUpdates: false
-        });
-        logger.info('TG Bot launched successfully');
-
-        startResultListener(bot, sender, redisConsumer);
-        startReminderListener(redisProducer, redisReminderConsumer, sender);
-        startSummaryListener(redisSummaryConsumer, sender);
-
-        // Start Web UI Server
-        startWebServer(redisProducer, redisConsumer);
-
         // Setup Dkron jobs
         setupAllJobs();
 
@@ -75,8 +78,7 @@ async function main() {
         process.once('SIGINT', stop);
         process.once('SIGTERM', stop);
     } catch (err) {
-        logger.error('Failed to start gateway bot:', err);
-        process.exit(1);
+        logger.error('Failed to setup background jobs:', err);
     }
 }
 
