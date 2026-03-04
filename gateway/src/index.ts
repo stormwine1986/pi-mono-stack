@@ -14,6 +14,7 @@ import { startSummaryListener } from './summary.js';
 import { setupAllJobs } from './dkron/setup.js';
 import { registerHandlers } from './telegram/handlers.js';
 import { logger } from './logger.js';
+import { startWebServer } from './web.js';
 
 const bot = new Telegraf(config.telegramToken, {
     telegram: {
@@ -56,6 +57,9 @@ async function main() {
         startResultListener(bot, sender, redisConsumer);
         startReminderListener(redisProducer, redisReminderConsumer, sender);
         startSummaryListener(redisSummaryConsumer, sender);
+
+        // Start Web UI Server
+        startWebServer(redisProducer, redisConsumer);
 
         // Setup Dkron jobs
         setupAllJobs();

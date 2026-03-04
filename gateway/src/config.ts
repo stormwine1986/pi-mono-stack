@@ -14,4 +14,5 @@ export const config = {
     adminId: parseInt(process.env.TG_ADMIN_ID || '0'),
     dkronUrl: process.env.DKRON_URL || 'http://127.0.0.1:18047/v1',
     llamaServerUrl: process.env.LLAMA_SERVER_URL || 'http://127.0.0.1:18080/v1',
+    webPort: parseInt(process.env.WEB_PORT || '48329'),
 };
