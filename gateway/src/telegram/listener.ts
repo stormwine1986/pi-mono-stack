@@ -13,6 +13,10 @@ export async function startResultListener(
     sender: TelegramSender,
     redisConsumer: Redis
 ) {
+    // Create a dedicated Redis connection for non-blocking queries (switch check, XACK)
+    // to avoid being blocked by the 5s XREADGROUP timeout.
+    const redisQuery = new Redis(config.redisUrl);
+
     const adminId = config.adminId;
     if (!adminId) {
         logger.error('TG_ADMIN_ID not configured, result listener disabled');
@@ -27,7 +31,7 @@ export async function startResultListener(
 
     // Ensure consumer group exists
     try {
-        await redisConsumer.xgroup('CREATE', stream, group, '$', 'MKSTREAM');
+        await redisQuery.xgroup('CREATE', stream, group, '$', 'MKSTREAM');
         logger.info(`Consumer group ${group} created`);
     } catch (err: any) {
         if (err.message.includes('BUSYGROUP')) {
@@ -38,7 +42,7 @@ export async function startResultListener(
     }
 
     // Phase 1: Process any pending messages from previous runs
-    await processPendingMessages(redisConsumer, bot, sender, adminId, stream, group, consumer);
+    await processPendingMessages(redisQuery, bot, sender, adminId, stream, group, consumer);
 
     // Phase 2: Start a separate loop to listen for external recovery triggers (from Dkron)
     startRecoveryTriggerListener(bot, sender, adminId, stream, group, consumer);
@@ -54,7 +58,7 @@ export async function startResultListener(
             if (result && result.length > 0) {
                 const [, messages] = result[0];
                 for (const [id, fields] of messages) {
-                    await processMessage(id, fields, redisConsumer, bot, sender, adminId, stream, group);
+                    await processMessage(id, fields, redisQuery, bot, sender, adminId, stream, group);
                 }
             }
         } catch (error) {

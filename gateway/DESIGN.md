@@ -50,6 +50,11 @@ gateway/
     │   ├── handlers.ts  # 指令处理器（/start, /help 等）
     │   ├── listener.ts  # 结果监听器，通过 Redis 订阅将消息推回 TG
     │   └── sender.ts    # 消息发送封装类，支持 Markdown、HTML 格式
+    ├── web/             # 测试 Web UI 与内部 REST API
+    │   ├── server.ts    # Express 服务初始化与生命周期管理
+    │   ├── routes.ts    # REST API 路由 (消息发送, TG开关, Dkron代理)
+    │   ├── sse.ts       # SSE 服务端事件推送 (实时同步消息与记忆审计)
+    │   └── public/      # 静态前端资源 (HTML/CSS/JS)
     └── dkron/           # 调度器集成层
         ├── setup.ts     # 系统自启动时自动注册/更新 Dkron Jobs
         ├── reminder.ts  # 处理用户设置的消息提醒逻辑
