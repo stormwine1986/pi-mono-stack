@@ -10,6 +10,7 @@ const CLEANUP_JOB_NAME = 'gateway-temp-cleanup';
 export async function setupAllJobs() {
     await setupRecoveryJob();
     await setupCleanupJob();
+    await setupMonitorJob();
 }
 
 /**
@@ -45,6 +46,28 @@ export async function setupCleanupJob() {
             // Find files in .gateway that are more than 60 minutes old and delete them.
             // Using docker exec to run it inside the gateway container where the volume is mounted.
             command: "docker exec gateway find /home/pi-mono/.pi/agent/workspace/.gateway -type f -mmin +60 -delete"
+        },
+        retries: 1,
+        concurrency: 'forbid'
+    };
+
+    await ensureJob(jobData);
+}
+
+/**
+ * Ensures a job is registered in Dkron that monitors failed shell jobs and sends reminders.
+ */
+export async function setupMonitorJob() {
+    const jobData = {
+        name: 'monitor-failed-shell-jobs',
+        schedule: '@every 15m',
+        owner: 'gateway',
+        executor: 'shell',
+        executor_config: {
+            command: "/usr/local/bin/monitor_jobs.sh"
+        },
+        tags: {
+            role: "internal-monitor"
         },
         retries: 1,
         concurrency: 'forbid'
