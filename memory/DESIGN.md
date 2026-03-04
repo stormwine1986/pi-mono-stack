@@ -1,7 +1,7 @@
 # 🧠 记忆子系统概要设计 (Memory Subsystem Design)
 
 ## 1. 系统概述
-记忆子系统（代号 `memsearch`）负责管理 Agent 的长期对话记忆与事实沉淀。系统从传统的文件检索模式升级为基于 **Mem0 SDK** 的原子级对话记忆系统，支持语义检索、事实自动脱水与多维度隔离。
+记忆子系统（代号 `memory`）负责管理 Agent 的长期对话记忆与事实沉淀。系统从传统的文件检索模式升级为基于 **Mem0 SDK** 的原子级对话记忆系统，支持语义检索、事实自动脱水与多维度隔离。
 
 本系统的设计核心原则是：**数据不出本地、处理过程异步、检索过程主动。**
 
@@ -56,7 +56,7 @@
 ### 4.2 记忆的主动检索 (Retrieval)
 1.  **决策**: Agent 在思考阶段发现需要背景信息。
 2.  **调用**: Agent 执行 CLI 命令 `memory search --user_id=... "关键词"`。
-3.  **响应**: CLI 通过 HTTP 请求 `memsearch` 服务的 `/search` 接口，返回 Top-K 相关事实。
+3.  **响应**: CLI 通过 HTTP 请求 `memory` 服务的 `/search`接口，返回 Top-K 相关事实。
 4.  **利用**: Agent 将事实融入上下文中生成更精准的回复。
 
 ---
@@ -64,7 +64,6 @@
 ## 5. 接口契约 (API Contract)
 
 ### 5.1 HTTP 服务 (Port: 18090)
-- `GET /health`: 返回服务状态与模型对齐信息。
 - `POST /search`: 语义检索记忆。
     - 入参: `{ query: string, user_id: string, agent_id?: string, limit?: number }`
 - `GET /memories`: 按用户拉取全量记忆列表。
@@ -77,7 +76,7 @@
 ---
 
 ## 6. 环境依赖
-- **镜像**: `pi-mono-stack-memsearch:latest` (Python 3.11-slim)
+- **镜像**: `pi-mono-stack-memory:latest` (Python 3.11-slim)
 - **核心包**: `mem0ai`, `chromadb`, `fastapi`, `redis`
-- **挂载卷**: `.pi/agent/workspace/.memsearch` -> `/data` (存储数据库文件)
+- **挂载卷**: `.pi/agent/workspace/.memory` -> `/data` (存储数据库文件)
 - **网络**: 必须能访问 Redis、llama-server (18080) 和 llama-embedding (18081)

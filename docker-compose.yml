@@ -25,6 +25,7 @@ services:
     environment:
       - REDIS_URL=redis://127.0.0.1:6379
       - DKRON_URL=http://127.0.0.1:18047/v1
+      - MEMORY_URL=http://127.0.0.1:18090
       - AGENT_ID=0
       - RCLONE_CONFIG_S3_TYPE=s3
       - RCLONE_CONFIG_S3_PROVIDER=Other
@@ -73,12 +74,12 @@ services:
     command: "--config /app/config.yaml"
     network_mode: host
 
-  memsearch:
+  memory:
     build:
-      context: memsearch
+      context: memory
       dockerfile: Dockerfile
       network: host
-    container_name: memsearch
+    container_name: memory
     environment:
       - REDIS_URL=redis://127.0.0.1:6379
       - LLAMA_SERVER_URL=http://127.0.0.1:18080/v1
@@ -86,19 +87,13 @@ services:
       - MEM_API_PORT=18090
     volumes:
       - ./.pi:/home/pi-mono/.pi
-      - ./.pi/agent/workspace/.memsearch:/data
+      - ./.pi/agent/workspace/.memory:/data
     network_mode: host
     restart: unless-stopped
     depends_on:
       - redis
       - llama-server
       - llama-embedding
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:18090/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
       
   dkron:
     build:

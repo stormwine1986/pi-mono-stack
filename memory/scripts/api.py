@@ -22,14 +22,6 @@ class SearchResponse(BaseModel):
     results: List[MemoryItem]
     total: int
 
-@app.get("/health")
-async def health():
-    return {
-        "status": "healthy",
-        "embedder": config.LLAMA_EMBEDDING_URL,
-        "llm": config.LLAMA_SERVER_URL,
-        "dimensions": config.EMBEDDING_DIMS
-    }
 
 @app.post("/search", response_model=SearchResponse)
 async def search(req: SearchRequest):

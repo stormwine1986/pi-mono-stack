@@ -2,7 +2,7 @@
 # .pi/agent/bin/memory
 # 记忆系统 CLI —— 供 Agent 调用
 
-MEMSEARCH_URL="${MEMSEARCH_URL:-http://127.0.0.1:18090}"
+MEMORY_URL="${MEMORY_URL:-http://127.0.0.1:18090}"
 
 show_help() {
     echo "Usage: memory <search|list> [options] [query]"
@@ -28,7 +28,7 @@ case "$1" in
       esac
     done
     if [ -z "$USER_ID" ]; then echo "Error: --user_id is required"; exit 1; fi
-    curl -s -X POST "${MEMSEARCH_URL}/search" \
+    curl -s -X POST "${MEMORY_URL}/search" \
       -H "Content-Type: application/json" \
       -d "{\"query\": \"${QUERY}\", \"user_id\": \"${USER_ID}\"}"
     ;;
@@ -42,7 +42,7 @@ case "$1" in
       esac
     done
     if [ -z "$USER_ID" ]; then echo "Error: --user_id is required"; exit 1; fi
-    curl -s "${MEMSEARCH_URL}/memories?user_id=${USER_ID}"
+    curl -s "${MEMORY_URL}/memories?user_id=${USER_ID}"
     ;;
   *)
     show_help

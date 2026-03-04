@@ -13,8 +13,8 @@ named with `gateway`, acting as the system's central Event Hub, orchestrates the
 named with `litellm`, serves as the Compute Pool Container managed many compute sources. It is responsible for provisioning compute power to the `agent`.
 
 **Memory Container**
-named with `memsearch`, hosting the agent's memory, acting as the engine for memory management such as organize and search.
-you can use `memsearch` command to recall your memory.
+named with `memory`, hosting the agent's memory, acting as the engine for memory management such as organize and search.
+you can use `memory` command to recall your memory.
 
 **Tools Container**
 labeled by `tools`,serves as a tool, where the /app directory houses skill-specific tools, the execution environment, and the `SKILL.md` instruction file.

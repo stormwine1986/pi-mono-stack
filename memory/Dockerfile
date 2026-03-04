@@ -25,12 +25,7 @@ RUN groupadd -g 1000 pi-mono && \
 
 # Copy scripts and source code
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY config.py /app/config.py
-COPY mem0_client.py /app/mem0_client.py
-COPY observer.py /app/observer.py
-COPY worker.py /app/worker.py
-COPY api.py /app/api.py
-COPY main.py /app/main.py
+COPY scripts/ /app/
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
