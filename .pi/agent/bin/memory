@@ -8,8 +8,8 @@ show_help() {
     echo "Usage: memory <search|list> [options] [query]"
     echo ""
     echo "Actions:"
-    echo "  search --user_id=<id> [--agent_id=<id>] <query>  检索相关记忆"
-    echo "  list --user_id=<id>                            获取用户所有记忆"
+    echo "  search --user_id=<id> <query>  检索相关记忆"
+    echo "  list --user_id=<id>            获取用户所有记忆"
 }
 
 if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -20,10 +20,9 @@ fi
 case "$1" in
   search)
     shift
-    AGENT_ID=""; USER_ID=""; QUERY=""
+    USER_ID=""; QUERY=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
-        --agent_id=*) AGENT_ID="${1#*=}"; shift ;;
         --user_id=*)  USER_ID="${1#*=}"; shift ;;
         *)            QUERY="$*"; break ;;
       esac
@@ -31,7 +30,7 @@ case "$1" in
     if [ -z "$USER_ID" ]; then echo "Error: --user_id is required"; exit 1; fi
     curl -s -X POST "${MEMSEARCH_URL}/search" \
       -H "Content-Type: application/json" \
-      -d "{\"query\": \"${QUERY}\", \"user_id\": \"${USER_ID}\", \"agent_id\": \"${AGENT_ID}\"}"
+      -d "{\"query\": \"${QUERY}\", \"user_id\": \"${USER_ID}\"}"
     ;;
   list)
     shift

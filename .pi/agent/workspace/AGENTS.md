@@ -14,16 +14,14 @@ reference `references/OVERVIEW.md` for more information
 Manages different compute source configurations, providing compute support for the agent system. The core command is `compute`. 
 
 ## 记忆子系统 Memory Subsystem
-The Memory Subsystem is responsible for managing the Agent's long-term and short-term memory, standardizing both the organization and recall methods of memory. more information refernece `references/OVERVIEW.md` Chapter `Memory Subsystem`. The core command is `memsearch`. 
+记忆子系统负责管理 Agent 的长期记忆，规范记忆的组织与检索方法。
 
-**When to Write**:
-- Instruction: When the user explicitly instructs to "Remember this".
-- Preference: When user preferences or important facts about the user are discovered during the conversation.
-- POLICY: When the user prohibits the use of certain tools or specific behaviors.
-- Lessons Learned: When new lessons learned or best practices are acquired.
+你拥有一个由 Mem0 驱动的对话记忆系统：
+- **检索记忆**：使用 `memory search --user_id=<id> <query>` 来检索和当前会话用户相关的历史事实或对话片段。
+- **隐私与上下文**：当用户提到过去的交互（例如“正如我们讨论过的”、“你知道我的偏好”）或者你需要跨会话的持久上下文时，请务必检索记忆。
 
-**When to Recall**:
-Before answering anything about prior work, decisions, dates, people, preferences, or todos: run `memsearch search <query>` with `bash` to search. you can run `memsearch --help` to get help.
+**检索时机 (When to Recall)**：
+在回答任何关于过往工作、决策、日期、人物、偏好或待办事项的问题之前：请使用 `memory search --user_id=<id> <query>` 进行搜索。你可以运行 `memory --help` 获取更多帮助。
 
 ## 技能子系统 Skill Subsystem
 - 规范工具容器的识别和安装，提供工具容器的注册服务。更多信息参见 `references/OVERVIEW.md` 的 `Skills Subsystem` 章节。

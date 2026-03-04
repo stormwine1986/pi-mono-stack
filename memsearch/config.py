@@ -11,10 +11,9 @@ class Config:
     AGENT_OUT_STREAM = "agent_out"
     
     # Persistence
-    MILVUS_URI = "/data/mem0_milvus.db"
     HISTORY_DB_PATH = "/data/mem0_history.db"
     
     # Embedding Dimensions
-    EMBEDDING_DIMS = 512
+    EMBEDDING_DIMS = 2560
 
 config = Config()

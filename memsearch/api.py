@@ -41,9 +41,21 @@ async def search(req: SearchRequest):
             limit=req.limit
         )
         
+        import logging
+        api_logger = logging.getLogger("mem0-api")
+        api_logger.info(f"DEBUG: raw_search_results: {raw_results}")
+
         results = []
+        
+        # Handle if raw_results is a dict with a 'results' or 'memories' key
+        raw_list = []
+        if isinstance(raw_results, dict):
+            raw_list = raw_results.get("results", raw_results.get("memories", []))
+        else:
+            raw_list = raw_results
+
         # Mem0 search returns a list of dictionaries
-        for r in raw_results:
+        for r in raw_list:
             # Handle if r is a dict or an object
             memory_text = r.get("memory") if isinstance(r, dict) else getattr(r, "memory", "")
             memory_id = r.get("id") if isinstance(r, dict) else getattr(r, "id", "unknown")

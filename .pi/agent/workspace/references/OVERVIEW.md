@@ -40,13 +40,6 @@ You can use the `read`, `write`, and `edit` tools to update these files as neede
 ## Compute Subsystem
 Manages different compute source configurations, providing compute support for the agent system. The core command is `compute`. 
 
-## Memory Subsystem
-You wake up fresh each session. These files are your continuity:
-- **Daily notes:** `memory/YYYY-MM-DD.md` (create `memory/` if needed) — raw logs of what happened
-- **Long-term:** `MEMORY.md` — your curated memories, like a human's long-term memory
-
-`memsearch` command is useful for memroy subsystem. you can run `memsearch --help` to get help.
-
 ## Skills Subsystem
 SOPs (Standard Operating Procedures) are also manifested as `SKILL.md` files within the `skills` directory. They serve as high-level task guides, directing you on how to leverage existing tools to accomplish specific objectives.
 Tool-based skills require Tool Container configuration. A Tool Container must be activated on its initial use, and reactivation is required if the container's image is rebuilt.
