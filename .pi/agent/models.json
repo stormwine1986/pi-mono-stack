@@ -17,6 +17,17 @@
           "maxTokens": 8192
         },
         {
+          "id": "gemini-3.1-flash-lite-preview",
+          "name": "Gemini 3.1 flash lite",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 1000000,
+          "maxTokens": 8192
+        },
+        {
           "id": "kimi-k2.5",
           "name": "Kimi K2.5",
           "reasoning": true,
