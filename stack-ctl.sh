@@ -59,6 +59,16 @@ cmd_down() {
   echo "✅ Stack is down."
 }
 
+cmd_restart() {
+  if [ $# -gt 0 ]; then
+    echo "♻️ Restarting specific services: $@ …"
+    cmd_up --force-recreate "$@"
+  else
+    cmd_down
+    cmd_up
+  fi
+}
+
 cmd_backup() {
   local TIMESTAMP=$(date +%Y%m%d%H%M%S)
   local BACKUP_NAME="pi-workspace-${TIMESTAMP}.tar.gz"
@@ -103,6 +113,7 @@ Usage: $(basename "$0") <command> [options]
 Commands:
   up      Load secrets from pass and start all services (docker compose up -d)
   down    Stop and remove containers, networks (docker compose down)
+  restart Stop and start all services (down then up)
   build   Build or rebuild services
   logs    Follow service logs (docker compose logs -f)
   backup  Compress and backup agent workspace to rclone remote (garage)
@@ -119,10 +130,11 @@ fi
 COMMAND="$1"; shift
 
 case "$COMMAND" in
-  up)     cmd_up "$@" ;;
-  down)   cmd_down "$@" ;;
-  build)  cmd_build "$@" ;;
-  logs)   cmd_logs "$@" ;;
-  backup) cmd_backup ;;
+  up)      cmd_up "$@" ;;
+  down)    cmd_down "$@" ;;
+  restart) cmd_restart "$@" ;;
+  build)   cmd_build "$@" ;;
+  logs)    cmd_logs "$@" ;;
+  backup)  cmd_backup ;;
   *)      echo "❌ Unknown command: $COMMAND"; usage ;;
 esac
