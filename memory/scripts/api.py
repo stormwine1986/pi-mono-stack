@@ -1,12 +1,20 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 import os
 import json
 from pydantic import BaseModel
 from typing import Optional, List
+import time
 from mem0_client import memory_client
 from config import config
+from metrics import SEARCH_DURATION, SEARCH_TOTAL
 
 app = FastAPI(title="Pi Memory Service")
+
+@app.get("/metrics")
+async def metrics():
+    """Exposes Prometheus metrics directly without trailing slash redirects."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 class SearchRequest(BaseModel):
     query: str
@@ -28,12 +36,15 @@ class SearchResponse(BaseModel):
 @app.post("/search", response_model=SearchResponse)
 async def search(req: SearchRequest):
     try:
+        SEARCH_TOTAL.inc()
+        start_time = time.monotonic()
         raw_results = memory_client.search(
             query=req.query,
             user_id=req.user_id,
             agent_id=req.agent_id,
             limit=req.limit
         )
+        SEARCH_DURATION.observe(time.monotonic() - start_time)
         
         import logging
         api_logger = logging.getLogger("mem0-api")

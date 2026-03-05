@@ -6,6 +6,7 @@ import redis
 import os
 from datetime import datetime
 from config import config
+from metrics import AUDIT_EVENTS
 
 logger = logging.getLogger("memory-audit")
 
@@ -33,6 +34,9 @@ class MemoryAuditor:
             "fact": fact,
             "metadata": metadata or {}
         }
+        
+        # Increment Prometheus counter
+        AUDIT_EVENTS.labels(action=event_type).inc()
         
         # 1. Log to file (JSONL)
         try:

@@ -17,7 +17,8 @@ RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
     "openai" \
     "fastapi" \
     "uvicorn" \
-    "python-multipart"
+    "python-multipart" \
+    "prometheus_client"
 
 # Create pi-mono user and group (1000:1000)
 RUN groupadd -g 1000 pi-mono && \

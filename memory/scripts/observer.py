@@ -4,6 +4,7 @@ import time
 import redis
 from config import config
 from worker import memory_worker
+from metrics import OBSERVER_MESSAGES
 
 logger = logging.getLogger("mem0-observer")
 logging.basicConfig(level=logging.INFO)
@@ -70,10 +71,12 @@ class StreamObserver:
             key = f"{self.prompt_cache_prefix}{task_id}"
             self.r.setex(key, self.cache_ttl, prompt)
             logger.debug(f"Cached prompt for task {task_id}")
+            OBSERVER_MESSAGES.labels(stream=config.AGENT_IN_STREAM, action="cached").inc()
 
     def _handle_agent_out(self, payload):
         # We only care about successful completion for memory
         if payload.get("status") != "success":
+            OBSERVER_MESSAGES.labels(stream=config.AGENT_OUT_STREAM, action="skipped").inc()
             return
 
         task_id = payload.get("id")
@@ -94,8 +97,10 @@ class StreamObserver:
             memory_worker.submit_interaction(user_id, agent_id, prompt, response)
             # Cleanup cache
             self.r.delete(key)
+            OBSERVER_MESSAGES.labels(stream=config.AGENT_OUT_STREAM, action="paired").inc()
         else:
             logger.warning(f"Response received for task {task_id} but prompt not found in cache")
+            OBSERVER_MESSAGES.labels(stream=config.AGENT_OUT_STREAM, action="prompt_miss").inc()
 
 if __name__ == "__main__":
     observer = StreamObserver()
