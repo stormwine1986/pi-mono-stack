@@ -21,6 +21,7 @@ class SearchRequest(BaseModel):
     user_id: str
     agent_id: Optional[str] = None
     limit: Optional[int] = 5
+    score_threshold: Optional[float] = 0.5
 
 class MemoryItem(BaseModel):
     id: str
@@ -73,6 +74,10 @@ async def search(req: SearchRequest):
                 score=score,
                 metadata=metadata
             ))
+            
+        # Filter by threshold if provided
+        if req.score_threshold is not None:
+            results = [r for r in results if r.score <= req.score_threshold]
             
         return SearchResponse(results=results, total=len(results))
     except Exception as e:
