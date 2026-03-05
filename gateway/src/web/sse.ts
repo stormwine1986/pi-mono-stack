@@ -25,8 +25,8 @@ export function registerSSE(app: Express, redisConsumer: Redis) {
                     const results = await (redisConsumer as any).xread(
                         'BLOCK', 5000,
                         'COUNT', 10,
-                        'STREAMS', config.agent_out, config.memory_audit,
-                        lastIdAgent, lastIdMem
+                        'STREAMS', config.agent_out, config.memory_audit, config.summary_out,
+                        lastIdAgent, lastIdMem, '$'
                     );
                     if (results) {
                         for (const [stream, messages] of results) {
@@ -38,6 +38,9 @@ export function registerSSE(app: Express, redisConsumer: Redis) {
                                 if (dataIndex !== -1) {
                                     try {
                                         const payload = JSON.parse(fields[dataIndex + 1]);
+                                        if (stream === config.summary_out) {
+                                            payload.type = 'job_summary';
+                                        }
                                         sendEvent(payload);
                                     } catch (e) {
                                         logger.error(`[WebUI] Failed to parse payload: ${e}`);

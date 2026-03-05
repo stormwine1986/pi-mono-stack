@@ -69,6 +69,55 @@ async function fetchDkronJobs() {
     }
 }
 
+// ── Job Summaries ──────────────────────────────────────────
+
+async function fetchSummaries() {
+    try {
+        const res = await fetch('/api/summaries');
+        const summaries = await res.json();
+        const container = document.getElementById('summary-list');
+
+        if (!summaries || summaries.length === 0) {
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No summaries found</div>';
+            return;
+        }
+
+        container.innerHTML = summaries.map(s => renderSummaryHTML(s)).join('');
+    } catch (err) {
+        console.error('Failed to fetch summaries:', err);
+    }
+}
+
+function renderSummaryHTML(s) {
+    const time = new Date(s.timestamp).toLocaleString();
+    return `
+        <div class="job-item">
+            <div class="job-header">
+                <span class="job-name">${s.job}</span>
+                <span style="font-size: 0.7em; color: #999;">${time}</span>
+            </div>
+            <div style="font-size: 0.85em; color: #444; margin-top: 5px; line-height: 1.4; border-left: 2px solid #2196f3; padding-left: 8px;">
+                ${s.summary}
+            </div>
+        </div>
+    `;
+}
+
+function appendSummary(s) {
+    const container = document.getElementById('summary-list');
+    if (container.querySelector('div[style*="color: #999"]')) {
+        container.innerHTML = '';
+    }
+    const div = document.createElement('div');
+    div.innerHTML = renderSummaryHTML(s);
+    container.insertBefore(div.firstElementChild, container.firstChild);
+
+    // Keep latest 20
+    while (container.children.length > 20) {
+        container.removeChild(container.lastChild);
+    }
+}
+
 // ── Telegram Toggle ─────────────────────────────────────────
 
 async function fetchTGStatus() {
@@ -198,6 +247,8 @@ function connect() {
             appendMessage('Progress: ' + data.event + (data.data ? ' ' + JSON.stringify(data.data) : ''), 'progress');
         } else if (data.event && ['ADD', 'UPDATE', 'DELETE'].includes(data.event)) {
             appendMemoryEvent(data);
+        } else if (data.type === 'job_summary') {
+            appendSummary(data);
         }
     };
 
@@ -213,5 +264,6 @@ function connect() {
 
 fetchTGStatus();
 fetchDkronJobs();
+fetchSummaries();
 setInterval(fetchDkronJobs, 30000);
 connect();

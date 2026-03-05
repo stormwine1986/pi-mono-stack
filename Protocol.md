@@ -79,7 +79,7 @@ Gateway 模块作为系统对外的唯一接入点，负责外部消息（如 Te
 - **流向**: Dkron -> Gateway
 
 由于后台作业（如备份、拉取镜像）通常执行时间较长，其完成事件会推送到此流。
-**注意**: Gateway 的 `Summary Listener` 会监听此流，并自动调用 **Llama Server** 获取作业日志并生成 AI 摘要推送给管理员。
+**注意**: Gateway 的 `Summary Listener` 会监听此流，并自动调用 **Llama Server** 获取作业日志并生成 AI 摘要。摘要结果会同步推送到 `summary_out` 流和 Telegram。
 
 **格式 (JSON):** (payload 字段为 JSON 字符串)
 ```json
@@ -108,7 +108,23 @@ Gateway 模块作为系统对外的唯一接入点，负责外部消息（如 Te
 }
 ```
 
-### 2.6 Gateway 运维流 (`gateway_ctl`)
+### 2.6 任务摘要输出 (`summary_out`)
+- **Redis 键名**: `summary_out` (Redis Stream)
+- **保留策略**: `MAXLEN ~ 1000`
+- **流向**: Gateway -> Other Services
+
+代表经 AI 总结后的后台任务执行快照。
+
+**格式 (JSON):** (payload 字段为 JSON 字符串)
+```json
+{
+  "job": "string",           // 作业名称
+  "summary": "string",       // 中文 AI 摘要文本
+  "timestamp": "ISO-8601"    // 生成时间
+}
+```
+
+### 2.7 Gateway 运维流 (`gateway_ctl`)
 - **Redis 键名**: `gateway_ctl` (Redis Stream)
 - **保留策略**: `MAXLEN ~ 100`
 - **流向**: Dkron -> Gateway
@@ -118,7 +134,7 @@ Gateway 模块作为系统对外的唯一接入点，负责外部消息（如 Te
 **格式 (键值对):**
 - `action`: `RECOVER_PENDING` (触发清理/恢复待处理消息)
 
-### 2.7 记忆审计流 (`memory_audit`)
+### 2.8 记忆审计流 (`memory_audit`)
 - **Redis 键名**: `memory_audit` (Redis Stream)
 - **保留策略**: `MAXLEN ~ 1000`
 - **流向**: Memory -> Observer/Gateway

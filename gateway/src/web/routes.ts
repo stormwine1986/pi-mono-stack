@@ -87,4 +87,27 @@ export function registerRoutes(app: Express, redisProducer: Redis) {
             res.status(500).json({ error: 'Failed to push to Redis' });
         }
     });
+
+    // Get Summary History
+    app.get('/api/summaries', async (req, res) => {
+        try {
+            // Get last 20 messages from summary_out
+            const results = await redisProducer.xrevrange(config.summary_out, '+', '-', 'COUNT', 20);
+            const summaries = results.map(([id, fields]) => {
+                const payloadIndex = fields.indexOf('payload');
+                if (payloadIndex !== -1) {
+                    try {
+                        return { id, ...JSON.parse(fields[payloadIndex + 1]) };
+                    } catch (e) {
+                        return null;
+                    }
+                }
+                return null;
+            }).filter(s => s !== null);
+            res.json(summaries);
+        } catch (err) {
+            logger.error(`[WebUI] Failed to fetch summaries: ${err}`);
+            res.status(500).json({ error: 'Failed to fetch from Redis' });
+        }
+    });
 }

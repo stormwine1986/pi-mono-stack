@@ -22,6 +22,7 @@ Gateway 在系统中处于边缘位置，起着承上启下的作用：
     - **下行流 (Response/Notice)**: 
         - `agent_out` (Redis Stream): Agent 处理结果。
         - `background_out` (Redis Stream): 后台任务执行结果通知（由 Summary Listener 接管进行 AI 摘要）。
+        - `summary_out` (Redis Stream): 大模型生成后的后台任务摘要结果（JSON）。
         - `reminder_out` (Redis Stream): 提醒事项通知（来自 Dkron）。
     - **运维流 (Admin)**: 
         - `gateway_ctl` (Redis Stream): 接收系统级运维指令（如由 Dkron 定期触发的 `RECOVER_PENDING`）。
@@ -43,7 +44,7 @@ gateway/
 └── src/                 # 源代码目录
     ├── index.ts         # 应用主入口，负责 Bot 初始化、服务注删与监听器启动
     ├── config.ts        # 全局配置管理（环境变量映射）
-    ├── summary.ts       # 摘要监听器，利用边缘 AI 对 background_out 进行处理
+    ├── summary.ts       # 摘要监听器，利用边缘 AI 对 background_out 进行处理。生成摘要后会写入 summary_out 流，并同步推送到 TG。
     ├── logger.ts        # 基于 Winston 或类似的日志记录工具
     ├── types.ts         # 全局类型定义（消息格式、接口定义）
     ├── telegram/        # Telegram 业务层
@@ -57,7 +58,7 @@ gateway/
     │   └── public/      # 静态前端资源 (HTML/CSS/JS)
     └── dkron/           # 调度器集成层
         ├── setup.ts     # 系统自启动时自动注册/更新 Dkron Jobs
-        ├── reminder.ts  # 处理用户设置的消息提醒逻辑
+        ├── reminder.ts  # 处理用户设置的消息提醒逻辑。
 ```
 
 ## 4. 使用的技术栈 (Technology Stack)

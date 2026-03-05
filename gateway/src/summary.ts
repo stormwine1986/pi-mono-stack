@@ -95,8 +95,22 @@ async function handleMessage(
         // 2. Generate summary using LiteLLM
         const summary = await generateSummary(jobName, logs);
 
-        // 3. Push to TG
+        // 3. Push to summary_out & TG
         if (summary) {
+            // A. Always push to summary_out Redis Stream for system integration
+            try {
+                const summaryPayload = {
+                    job: jobName,
+                    summary: summary,
+                    timestamp: new Date().toISOString()
+                };
+                await (redis as any).xadd(config.summary_out, 'MAXLEN', '~', 1000, '*', 'payload', JSON.stringify(summaryPayload));
+                logger.info(`Summary pushed to ${config.summary_out} for job ${jobName}`);
+            } catch (err) {
+                logger.error(`Failed to push summary to ${config.summary_out}:`, err);
+            }
+
+            // B. Push to TG
             const finalMessage = `📊 *任务执行摘要: ${jobName}*\n\n${summary}`;
             await sender.sendAdminMessage(adminId, finalMessage);
         }
