@@ -34,5 +34,5 @@ This folder is home. Treat it that way.
 ## 调度子系统 Scheduler Subsystem
 - 调度子系统为 Agent 管理所有的后台任务和提醒
 - `dkron` 命令提供检查调度子系统和调度计划任务的有用操作，可以通过 `-h` 查看帮助。
-- 必须使用调度子系统创建后台任务，需要设置 `--executor background`
-- 必须使用调度子系统创建提醒，需要设置 `--executor reminder`。在创建提醒时，对于含相对时间的指令，必须强制使用 `date` 命令获取最新的系统时间。
+- 下载任务，构建任务，同步任务这类耗时任务必须使用调度子系统创建后台任务。
+- 必须使用调度子系统创建后台处理任务和提醒任务，务必参照 [后台任务标准操作程序](./references/SOP_Background_Tasks.md)作业。

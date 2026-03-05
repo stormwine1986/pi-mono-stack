@@ -32,11 +32,13 @@ Options for job ls:
   --sort <asc|desc>      Sort by next execution time (default: desc, near to far)
 
 Options for job create:
+  --name <id>            Custom unique ID for the job (optional)
   --displayname <desc>   Nice name for the job (description)
   --schedule <expr>      Cron expression or "@at <ISO8601>" or "@every <duration>" (required)
   --command <cmd>        Command to execute (required for shell/background)
   --message <msg>        Message for the reminder (required for reminder)
   --executor <name>      Executor to use (default: background)
+  --owner <id>          Owner ID of the job (required)
   --timeout <duration>   Job timeout (e.g. 10s, 5m)
   --env <KEY=VALUE>      Environment variables (can be used multiple times)
 
@@ -202,11 +204,18 @@ switch (command) {
                 const message = getFlag('message', actionArgs);
                 const displayname = getFlag('displayname', actionArgs);
                 const executor = getFlag('executor', actionArgs) || 'background';
+                const customName = getFlag('name', actionArgs);
+                const owner = getFlag('owner', actionArgs);
                 const timeout = getFlag('timeout', actionArgs);
                 const envs = getFlags('env', actionArgs);
 
                 if (!schedule) {
                     console.error('Error: --schedule is required');
+                    process.exit(1);
+                }
+
+                if (!owner) {
+                    console.error('Error: --owner is required');
                     process.exit(1);
                 }
 
@@ -220,10 +229,11 @@ switch (command) {
                     process.exit(1);
                 }
 
-                const name = generateId();
+                const name = customName || generateId();
                 const jobData = {
                     name,
                     schedule,
+                    owner: owner,
                     displayname: displayname || undefined,
                     executor: executor,
                     executor_config: {
