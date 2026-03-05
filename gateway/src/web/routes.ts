@@ -88,11 +88,12 @@ export function registerRoutes(app: Express, redisProducer: Redis) {
         }
     });
 
-    // Get Summary History
+    // Get Summary History (last 30 minutes)
     app.get('/api/summaries', async (req, res) => {
         try {
-            // Get last 20 messages from summary_out
-            const results = await redisProducer.xrevrange(config.summary_out, '+', '-', 'COUNT', 20);
+            const thirtyMinAgo = Date.now() - 30 * 60 * 1000;
+            // Get messages from summary_out that arrived in the last 30 minutes
+            const results = await redisProducer.xrevrange(config.summary_out, '+', thirtyMinAgo.toString());
             const summaries = results.map(([id, fields]) => {
                 const payloadIndex = fields.indexOf('payload');
                 if (payloadIndex !== -1) {

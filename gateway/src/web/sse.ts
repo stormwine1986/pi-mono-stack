@@ -20,19 +20,22 @@ export function registerSSE(app: Express, redisConsumer: Redis) {
         const reader = async () => {
             let lastIdAgent = '$';
             let lastIdMem = '$';
+            let lastIdSummary = '$';
+
             while (active) {
                 try {
                     const results = await (redisConsumer as any).xread(
                         'BLOCK', 5000,
                         'COUNT', 10,
                         'STREAMS', config.agent_out, config.memory_audit, config.summary_out,
-                        lastIdAgent, lastIdMem, '$'
+                        lastIdAgent, lastIdMem, lastIdSummary
                     );
                     if (results) {
                         for (const [stream, messages] of results) {
                             for (const [id, fields] of messages) {
                                 if (stream === config.agent_out) lastIdAgent = id;
                                 if (stream === config.memory_audit) lastIdMem = id;
+                                if (stream === config.summary_out) lastIdSummary = id;
 
                                 const dataIndex = fields.indexOf('payload');
                                 if (dataIndex !== -1) {

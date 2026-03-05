@@ -91,7 +91,7 @@ async function fetchSummaries() {
 function renderSummaryHTML(s) {
     const time = new Date(s.timestamp).toLocaleString();
     return `
-        <div class="job-item">
+        <div class="job-item summary-item" data-timestamp="${s.timestamp}">
             <div class="job-header">
                 <span class="job-name">${s.job}</span>
                 <span style="font-size: 0.7em; color: #999;">${time}</span>
@@ -111,11 +111,28 @@ function appendSummary(s) {
     const div = document.createElement('div');
     div.innerHTML = renderSummaryHTML(s);
     container.insertBefore(div.firstElementChild, container.firstChild);
+}
 
-    // Keep latest 20
-    while (container.children.length > 20) {
-        container.removeChild(container.lastChild);
-    }
+function autoCleanupSummaries() {
+    const thirtyMinAgo = Date.now() - 30 * 60 * 1000;
+    document.querySelectorAll('.summary-item').forEach(el => {
+        const tsString = el.getAttribute('data-timestamp');
+        if (!tsString) return;
+        const ts = new Date(tsString).getTime();
+        if (ts < thirtyMinAgo) {
+            el.style.transition = 'all 0.5s ease';
+            el.style.opacity = '0';
+            el.style.transform = 'translateX(20px)';
+            setTimeout(() => {
+                if (el.parentNode) el.remove();
+                // If container becomes empty, show placeholder
+                const container = document.getElementById('summary-list');
+                if (container && container.children.length === 0) {
+                    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No summaries found</div>';
+                }
+            }, 500);
+        }
+    });
 }
 
 // ── Telegram Toggle ─────────────────────────────────────────
@@ -266,4 +283,5 @@ fetchTGStatus();
 fetchDkronJobs();
 fetchSummaries();
 setInterval(fetchDkronJobs, 30000);
+setInterval(autoCleanupSummaries, 60000);
 connect();
