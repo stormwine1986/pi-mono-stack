@@ -16,14 +16,25 @@ show_help() {
 }
 
 fetch_metrics() {
+    # 1. Fetch LiteLLM Metrics
+    # Fallback to localhost if ENV not set
+    LITELLM_URL="${LITELLM_METRICS_URL:-http://localhost:4000/metrics}"
+    LLAMA_SERVER_URL="${LLAMA_SERVER_METRICS_URL:-http://localhost:18080/metrics}"
+
     if command -v curl >/dev/null 2>&1; then
-        METRICS=$(curl -s -L http://localhost:4000/metrics)
+        LITELLM_METRICS=$(curl -s -L --max-time 2 "$LITELLM_URL" || echo "")
     else
-        METRICS=$(docker exec litellm python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/metrics/').read().decode())" 2>/dev/null)
+        # LiteLLM python fallback
+        LITELLM_METRICS=$(docker exec litellm python3 -c "import urllib.request; print(urllib.request.urlopen('$LITELLM_URL').read().decode())" 2>/dev/null || echo "")
     fi
 
-    if [ -z "$METRICS" ]; then
-        echo -e "${RED}Error:${NC} Could not fetch metrics from LiteLLM (http://localhost:4000/metrics). Is LiteLLM running?"
+    # 2. Fetch Llama Server Metrics
+    LLAMA_METRICS=$(curl -s -L --max-time 2 "$LLAMA_SERVER_URL" | sed 's/^llamacpp:/llamacpp_server_/' || echo "")
+
+    METRICS="${LITELLM_METRICS}"$'\n'"${LLAMA_METRICS}"
+
+    if [ -z "$(echo "$METRICS" | tr -d '[:space:]')" ]; then
+        echo -e "${RED}Error:${NC} Could not fetch any metrics. Are the services running?"
         exit 1
     fi
 }
@@ -78,7 +89,11 @@ def parse_metrics(data):
             for k, v in re.findall(r'([^,="]+)="([^"]*)"', labels_str):
                 labels[k] = v
 
-        model = resolve_model_name(labels) or 'global'
+        if mname.startswith('llamacpp_server_'):
+            model = 'LOCAL: Llama-Server'
+        else:
+            model = resolve_model_name(labels) or 'global'
+            
         results[model][mname] += value
 
     return results
@@ -86,7 +101,8 @@ def parse_metrics(data):
 data = sys.stdin.read()
 results = parse_metrics(data)
 
-models_found = [m for m in results.keys() if m != 'global']
+models_found = [m for m in results.keys() if m != 'global' and not m.startswith('LOCAL:')]
+local_engines = [m for m in results.keys() if m.startswith('LOCAL:')]
 
 # --- Overall system status ---
 total_reqs = sum(
@@ -117,11 +133,11 @@ else:
 
 print()
 print(f"  \033[1;34mCompute Subsystem\033[0m  {sys_status}")
-print(f"  Models: {len(models_found)}  |  Reqs: {int(total_reqs)}  |  Tokens: {int(total_tokens)}  |  Errors: {int(total_failed)}")
+print(f"  IDC Models: {len(models_found)}  |  Reqs: {int(total_reqs)}  |  Tokens: {int(total_tokens)}  |  Errors: {int(total_failed)}")
 print()
 
 # --- Per-model table ---
-print(f"\033[1m  {'Model':<35} {'Reqs':>6}  {'Tokens':>10}  {'Lat(ms)':>8}  {'Err':>5}  {'State'}\033[0m")
+print(f"\033[1m  {'IDC Model':<35} {'Reqs':>6}  {'Tokens':>10}  {'Lat(ms)':>8}  {'Err':>5}  {'State'}\033[0m")
 print(f"  {'─' * 80}")
 
 for model in sorted(models_found):
@@ -160,6 +176,34 @@ for model in sorted(models_found):
 
     lat_str = f"{avg_lat:.0f}" if avg_lat > 0 else "-"
     print(f"  {model[:35]:<35} {reqs:>6}  {tok_display:>10}  {lat_str:>8}  {failed:>5}  {state_icon}")
+
+# --- Local Engines (Metrics from llama.cpp) ---
+if local_engines:
+    print()
+    print(f"\033[1m  {'Local Engine (llama.cpp)':<35} {'P-TP(t/s)':>9}  {'G-TP(t/s)':>9}  {'P-Tok':>10}  {'G-Tok':>10}  {'Busy'}\033[0m")
+    print(f"  {'─' * 90}")
+    for model in sorted(local_engines):
+        m = results[model]
+        p = 'llamacpp_server_'
+        
+        # Rates (Throughput)
+        p_rate = m.get(p + 'prompt_tokens_seconds', 0)
+        g_rate = m.get(p + 'predicted_tokens_seconds', 0)
+        
+        # Totals
+        p_total = int(m.get(p + 'prompt_tokens_total', 0))
+        g_total = int(m.get(p + 'tokens_predicted_total', 0))
+        
+        # Concurrency
+        processing = int(m.get(p + 'requests_processing', 0))
+        deferred = int(m.get(p + 'requests_deferred', 0))
+        busy_str = f"{processing}" if deferred == 0 else f"{processing}+{deferred}"
+        
+        # Formatting
+        p_rate_str = f"{p_rate:>9.1f}" if p_rate > 0 else f"{'-':>9}"
+        g_rate_str = f"{g_rate:>9.1f}" if g_rate > 0 else f"{'-':>9}"
+        
+        print(f"  {model[:35]:<35} {p_rate_str}  {g_rate_str}  {p_total:>10}  {g_total:>10}  {busy_str:>4}")
 
 print()
 PYEOF
