@@ -4,7 +4,7 @@ from .base import BaseProvider
 
 logger = logging.getLogger(__name__)
 
-class AkShareProvider(BaseProvider):
+class AkShareFundProvider(BaseProvider):
     def fetch(self, symbol: str, start_date: str) -> pd.DataFrame:
         """Fetch historical fund NAV from AkShare (currently supporting open funds)."""
         import akshare as ak
