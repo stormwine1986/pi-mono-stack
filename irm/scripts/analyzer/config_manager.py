@@ -3,8 +3,17 @@ import json
 import redis
 import argparse
 import falkordb
+import sys
+from pathlib import Path
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
+
+# Ensure /app is in sys.path so 'scripts' package can be found
+app_root = str(Path(__file__).resolve().parent.parent.parent)
+if app_root not in sys.path:
+    sys.path.append(app_root)
+
+from scripts.providers import get_provider, PROVIDER_REGISTRY
 
 def get_redis_client():
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
@@ -49,6 +58,13 @@ def update_source(ticker, symbol, provider):
     r.hset("irm:config:sources", ticker, json.dumps(data))
     print(f"Successfully updated source {ticker}: {symbol} via {provider}")
 
+def delete_source(ticker):
+    r = get_redis_client()
+    if r.hdel("irm:config:sources", ticker):
+        print(f"Successfully deleted source: {ticker}")
+    else:
+        print(f"Error: Source {ticker} not found.")
+
 def query_source(target_ticker=None):
     r = get_redis_client()
     assets = r.hgetall("irm:config:sources")
@@ -65,12 +81,7 @@ def query_source(target_ticker=None):
         print("No sources to query.")
         return
 
-    print("[*] Initializing OpenBB SDK (this might take a few seconds)...")
-    try:
-        from openbb import obb
-    except ImportError:
-        print("Error: OpenBB SDK not found. Cannot perform query.")
-        return
+    print(f"\n{'Ticker':<10} | {'Provider':<10} | {'Status':<10} | {'Details'}")
 
     fred_api_key = os.getenv("FRED_API_KEY")
     start_date = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
@@ -88,34 +99,20 @@ def query_source(target_ticker=None):
             details = "Unknown"
             
             try:
-                if provider == "yfinance":
-                    res = obb.equity.price.historical(symbol=symbol, provider="yfinance", start_date=start_date)
-                    df = res.to_dataframe()
-                    if not df.empty:
-                        status = "\033[92mPASS\033[0m"
-                        details = f"Last Value: {df.iloc[-1].iloc[0]:.2f} (from {symbol})"
-                    else:
-                        status = "\033[91mFAIL\033[0m"
-                        details = "Empty dataset returned"
-                elif provider == "fred":
-                    if not fred_api_key:
-                        status = "\033[91mFAIL\033[0m"
-                        details = "Missing FRED_API_KEY"
-                    else:
-                        res = obb.economy.fred_series(symbol=symbol, provider="fred", start_date=start_date, api_key=fred_api_key)
-                        df = res.to_dataframe()
-                        if not df.empty:
-                            status = "\033[92mPASS\033[0m"
-                            details = f"Last Value: {df.iloc[-1].iloc[0]:.2f} (from {symbol})"
-                        else:
-                            status = "\033[91mFAIL\033[0m"
-                            details = "Empty dataset returned"
+                # Use the provider registry instead of hardcoded if/else
+                provider_inst = get_provider(provider)
+                df = provider_inst.fetch(symbol, start_date)
+                value_col = provider_inst.get_value_column(df)
+
+                if not df.empty and value_col in df.columns:
+                    status = "\033[92mPASS\033[0m"
+                    details = f"Last Value: {df[value_col].iloc[-1]:.2f} (from {symbol})"
                 else:
                     status = "\033[91mFAIL\033[0m"
-                    details = f"Unsupported provider: {provider}"
+                    details = "Empty dataset or missing column"
             except Exception as e:
                 status = "\033[91mFAIL\033[0m"
-                details = str(e).split('\n')[0][:40] # Truncate long error messages
+                details = str(e).split('\n')[0][:45]  # Truncate error messages
                 
             print(f"{ticker:<10} | {provider:<10} | {status:<10} | {details}")
             
@@ -135,10 +132,13 @@ def main():
     update_sources_parser = sources_subparsers.add_parser("update", help="Update or create a data source")
     update_sources_parser.add_argument("ticker", help="Asset ticker (e.g. US10Y)")
     update_sources_parser.add_argument("symbol", help="Provider symbol (e.g. ^TNX)")
-    update_sources_parser.add_argument("provider", choices=["yfinance", "fred"], help="Data provider")
+    update_sources_parser.add_argument("provider", choices=list(PROVIDER_REGISTRY.keys()), help="Data provider")
     
     query_sources_parser = sources_subparsers.add_parser("query", help="Query real-time data from sources")
     query_sources_parser.add_argument("ticker", nargs="?", help="Specific ticker to query (optional)")
+
+    delete_sources_parser = sources_subparsers.add_parser("rm", help="Delete a data source")
+    delete_sources_parser.add_argument("ticker", help="Asset ticker to remove")
 
     args = parser.parse_args()
 
@@ -149,8 +149,10 @@ def main():
             update_source(args.ticker, args.symbol, args.provider)
         elif args.subcommand == "query":
             query_source(args.ticker)
+        elif args.subcommand == "rm":
+            delete_source(args.ticker)
         else:
-            print("Usage: irm sources {ls,update,query}")
+            print("Usage: irm sources {ls,update,query,rm}")
     else:
         parser.print_help()
 

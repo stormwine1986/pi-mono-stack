@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from falkordb import FalkorDB
-from openbb import obb
 import pandas as pd
 import redis
 import sys
@@ -15,6 +14,7 @@ if app_root not in sys.path:
     sys.path.append(app_root)
 
 from scripts.analyzer.update_weights import PortfolioWeightUpdater
+from scripts.providers import get_provider
 
 # 初始化日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -29,7 +29,7 @@ class PriceSignalUpdater:
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port or 6379
         
-        # 获取 FRED API KEY
+        # 获取 FRED API KEY (Moved into FredProvider but kept for legacy log if needed)
         self.fred_api_key = os.getenv("FRED_API_KEY")
         if self.fred_api_key:
             logger.info("FRED_API_KEY detected in environment.")
@@ -93,33 +93,18 @@ class PriceSignalUpdater:
         provider = asset_config['provider']
 
         try:
-            # 拉取 3 年历史数据用于计算分位
+            # Get provider from registry
+            provider_inst = get_provider(provider)
+            
+            # 拉取历史数据
             start_date = (datetime.now() - timedelta(days=3*365)).strftime('%Y-%m-%d')
+            df = provider_inst.fetch(symbol, start_date)
             
-            if provider == 'yfinance':
-                res = obb.equity.price.historical(symbol=symbol, provider='yfinance', start_date=start_date)
-            elif provider == 'fred':
-                if not self.fred_api_key:
-                    logger.error(f"Cannot fetch {asset_ticker} from fred: Missing FRED_API_KEY")
-                    return None, None
-                # 使用 fred_api_key 参数传入
-                res = obb.economy.fred_series(symbol=symbol, provider='fred', start_date=start_date, api_key=self.fred_api_key)
-            else:
-                logger.error(f"Unsupported provider: {provider}")
-                return None, None
-
-            df = res.to_dataframe()
-            
-            # 自动探测数值列 (FRED 通常返回 symbol 本身作为列名)
-            if provider == 'yfinance':
-                value_col = 'close'
-            else:
-                # 排除可能存在的 date 列，取第一个数值列
-                cols = [c for c in df.columns if c.lower() not in ['date', 'index']]
-                value_col = cols[0] if cols else None
+            # 获取数值列名
+            value_col = provider_inst.get_value_column(df)
             
             if df.empty or not value_col or value_col not in df.columns:
-                logger.warning(f"No valid data column for {symbol} ({provider}). Columns: {df.columns.tolist()}")
+                logger.warning(f"No valid data returned for {symbol} ({provider}). Columns: {df.columns.tolist() if not df.empty else 'EMPTY'}")
                 return None, None
             
             # 计算分位点和当前值
