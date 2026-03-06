@@ -31,8 +31,9 @@ RUN apk add --no-cache curl docker-cli redis jq
 
 # Copy scripts
 COPY scripts/monitor_jobs.sh /usr/local/bin/
+COPY scripts/cleanup_once_jobs.sh /usr/local/bin/
 COPY scripts/entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/monitor_jobs.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/monitor_jobs.sh /usr/local/bin/cleanup_once_jobs.sh /usr/local/bin/entrypoint.sh
 
 # Set Environment Variables
 ENV GODEBUG=netdns=go

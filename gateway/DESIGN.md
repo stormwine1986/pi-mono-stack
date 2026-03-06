@@ -28,8 +28,11 @@ Gateway 在系统中处于边缘位置，起着承上启下的作用：
         - `gateway_ctl` (Redis Stream): 接收系统级运维指令（如由 Dkron 定期触发的 `RECOVER_PENDING`）。
     - **数据协议**: 参考 [协议文档](../Protocol.md)
 - **Dkron (调度器)**: 
-    - Gateway 负责注册回收作业 (`gateway-recovery`) 以确保系统健壮性。
-    - 监听 Dkron 推送的 Webhook 或任务状态变化，转发给特定的 Telegram 管理员或用户。
+    - **作业管理**: Gateway 负责在系统启动时自动向 Dkron 注册并同步核心管理作业：
+        - `gateway-recovery`: 定期触发挂起任务的恢复逻辑。
+        - `monitor-failed-shell-jobs`: 监控 Shell 任务失败状态并发出提醒。
+        - `cleanup-finished-once-jobs`: 定期清理已完成的非周期性（一次性）任务。
+    - **消息分发**: 监听 `reminder_out` 流，将来自 Dkron 的提醒消息转发给特定的 Telegram 管理员或用户。
 - **Agent (业务核心)**: Gateway 与 Agent 不直接通信，而是通过 Redis 异步解耦。
 - **Llama Server (本地模型)**: 为 Summary Listener 提供推理支持，用于将复杂的 Dkron 执行日志总结为 100 字以内的精简摘要。
 

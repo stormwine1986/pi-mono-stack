@@ -11,6 +11,7 @@ export async function setupAllJobs() {
     await setupRecoveryJob();
     await setupCleanupJob();
     await setupMonitorJob();
+    await setupCleanupFinishedOnceJobs();
 }
 
 /**
@@ -68,6 +69,28 @@ export async function setupMonitorJob() {
         },
         tags: {
             role: "internal-monitor"
+        },
+        retries: 1,
+        concurrency: 'forbid'
+    };
+
+    await ensureJob(jobData);
+}
+
+/**
+ * Ensures a job is registered in Dkron that periodically cleans up finished one-time jobs.
+ */
+export async function setupCleanupFinishedOnceJobs() {
+    const jobData = {
+        name: 'cleanup-finished-once-jobs',
+        schedule: '@every 1h',
+        owner: 'gateway',
+        executor: 'shell',
+        executor_config: {
+            command: "/usr/local/bin/cleanup_once_jobs.sh"
+        },
+        tags: {
+            role: "internal-maintenance"
         },
         retries: 1,
         concurrency: 'forbid'

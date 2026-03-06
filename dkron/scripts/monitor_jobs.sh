@@ -1,8 +1,7 @@
 #!/bin/sh
 
-# Derive DKRON_URL from DKRON_HTTP_ADDR port
-PORT=$(echo "${DKRON_HTTP_ADDR:-:18047}" | sed 's/.*://')
-DKRON_URL="http://127.0.0.1:${PORT}/v1"
+# Set DKRON_URL with a default fallback
+DKRON_URL=${DKRON_URL:-"http://127.0.0.1:18047/v1"}
 REDIS_URL=${REDIS_URL:-"redis://127.0.0.1:6379"}
 
 echo "[$(date)] Starting failed jobs check..."
