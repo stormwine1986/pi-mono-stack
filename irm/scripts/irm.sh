@@ -69,7 +69,7 @@ case "$COMMAND" in
         echo "Usage: irm <command> [options]"
         echo ""
         echo "Available Commands:"
-        echo "  tracer    - Trace macro-to-micro impact propagation"
+        echo "  tracer    - Trace macro-to-micro impact propagation (supports --target <ticker>)"
         echo "  portfolio list   - List asset allocation status for a specified owner"
         echo "  portfolio update - Update a specific holding (e.g. irm portfolio update NVDA 300 850)"
         echo "  portfolio advisor - Get Kelly-based allocation advice (requires impacts/weights)"

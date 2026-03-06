@@ -61,18 +61,24 @@ class IRMEdgeViewer:
             print(f"[!] Query Error: {e}")
             return None
 
-    def list_edges(self, node_id=None):
+    def list_edges(self, node_id=None, from_node=None, to_node=None):
         """Fetch and display edges with optional node filtering."""
-        filter_clause = ""
+        filter_clauses = ["type(r) <> 'HOLDS'"]
+        
         if node_id:
-            # Match if either side has the ticker/name/target as node_id
-            filter_clause = (
-                f"AND (COALESCE(a.ticker, a.name, a.target) = '{node_id}' "
-                f"OR COALESCE(b.ticker, b.name, b.target) = '{node_id}') "
+            filter_clauses.append(
+                f"(COALESCE(a.ticker, a.name, a.target) = '{node_id}' "
+                f"OR COALESCE(b.ticker, b.name, b.target) = '{node_id}')"
             )
+        if from_node:
+            filter_clauses.append(f"COALESCE(a.ticker, a.name, a.target) = '{from_node}'")
+        if to_node:
+            filter_clauses.append(f"COALESCE(b.ticker, b.name, b.target) = '{to_node}'")
+
+        filter_clause = " WHERE " + " AND ".join(filter_clauses) if filter_clauses else ""
 
         cypher = (
-            f"MATCH (a)-[r]->(b) WHERE type(r) <> 'HOLDS' {filter_clause}"
+            f"MATCH (a)-[r]->(b) {filter_clause} "
             "RETURN labels(a), COALESCE(a.ticker, a.name, a.target), type(r), r.id, r.base_beta, r.gamma_sensitive, "
             "       labels(b), COALESCE(b.ticker, b.name, b.target), r.threshold_config "
             "ORDER BY type(r), labels(a)[0], COALESCE(a.ticker, a.name)"
@@ -80,7 +86,7 @@ class IRMEdgeViewer:
         result = self._query_falkor(cypher)
         
         if not result or not result.result_set:
-            msg = f"[!] No edges found for node '{node_id}'." if node_id else "[!] No edges found (excluding HOLDS)."
+            msg = "[!] No edges found matching the filter."
             print(msg)
             return
 
@@ -150,7 +156,9 @@ class IRMEdgeViewer:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRM Edge Viewer")
     parser.add_argument("--nodeID", help="Filter edges connected to a specific node ID (ticker or name)")
+    parser.add_argument("--from", dest="from_node", help="Filter edges starting FROM this node")
+    parser.add_argument("--to", dest="to_node", help="Filter edges going TO this node")
     args = parser.parse_args()
     
     viewer = IRMEdgeViewer()
-    viewer.list_edges(node_id=args.nodeID)
+    viewer.list_edges(node_id=args.nodeID, from_node=args.from_node, to_node=args.to_node)
