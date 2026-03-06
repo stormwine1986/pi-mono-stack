@@ -16,7 +16,7 @@ class KellyAdvisor:
         # Assumptions are now stored in ontology graph under :Investable nodes.
 
     def fetch_current_weights(self, owner="Admin"):
-        """Fetch current weights directly from FalkorDB [:HOLDS] edges."""
+        """Fetch current weights and denominations directly from FalkorDB [:HOLDS] edges."""
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         parsed = urlparse(redis_url)
         host = parsed.hostname or "localhost"
@@ -25,13 +25,17 @@ class KellyAdvisor:
         try:
             db = FalkorDB(host=host, port=port)
             graph = db.select_graph(self.graph_name)
-            cypher = f"MATCH (p:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(a:Investable) RETURN a.ticker, r.weight_pct"
+            cypher = f"MATCH (p:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(a:Investable) RETURN a.ticker, r.weight_pct, r.denomination"
             result = graph.query(cypher)
             
             weights = {}
             if result and result.result_set:
                 for row in result.result_set:
-                    weights[row[0]] = float(row[1] or 0.0)
+                    ticker = row[0]
+                    weights[ticker] = {
+                        "weight": float(row[1] or 0.0),
+                        "denomination": row[2] if len(row) > 2 and row[2] else "USD"
+                    }
             return weights
         except Exception as e:
             print(f"[!] Warning: Failed to fetch weights from DB: {e}")
@@ -132,18 +136,24 @@ if __name__ == "__main__":
     
     # Auto-fetch weights if not provided
     if args.weights:
-        weights = json.loads(args.weights)
+        raw_weights = json.loads(args.weights)
+        # Wrap simple float values into the new dict format for compatibility
+        weights = {}
+        for k, v in raw_weights.items():
+            if isinstance(v, dict):
+                weights[k] = v
+            else:
+                weights[k] = {"weight": float(v), "denomination": "USD"}
     else:
         weights = advisor.fetch_current_weights(owner=args.owner)
         if not weights:
             print(f"[!] No active holdings found for {args.owner}. Please provide --weights manually.")
-            # We don't exit, just continue with 0 weights if needed
     
     print("\n" + "="*20 + " KELLY CRITERION POSITION ADVISOR " + "="*20)
     print(f"Mode: {args.fraction}-Kelly | Owner: {args.owner}")
-    print("-" * 75)
-    print(f"{'Asset':<6} | {'Impact':<8} | {'WinRate':<7} | {'Curr Wt':<8} | {'Rec Wt':<8} | {'ACTION':<10}")
-    print("-" * 75)
+    print("-" * 80)
+    print(f"{'Asset':<6} | {'Denom':<5} | {'Impact':<8} | {'WinRate':<7} | {'Curr Wt':<8} | {'Rec Wt':<8} | {'ACTION':<10}")
+    print("-" * 80)
     
     # Process all assets in impacts, or all assets in weights
     all_tickers = set(impacts.keys()) | set(weights.keys())
@@ -151,7 +161,9 @@ if __name__ == "__main__":
     
     for asset in sorted(all_tickers):
         impact = impacts.get(asset, 0.0) # Default 0 impact if not specified
-        curr_weight = weights.get(asset, 0.0)
+        w_info = weights.get(asset, {"weight": 0.0, "denomination": "USD"})
+        curr_weight = w_info["weight"] if isinstance(w_info, dict) else float(w_info)
+        denom = w_info.get("denomination", "USD") if isinstance(w_info, dict) else "USD"
         asset_assumptions = db_assumptions.get(asset, {"base_win_rate": 0.55, "upside": 0.30, "max_dd": 0.20})
         
         res = advisor.evaluate_position(asset, curr_weight, impact, asset_assumptions)
@@ -165,6 +177,6 @@ if __name__ == "__main__":
         curr_w_str = f"{res['current_weight']*100:>5.1f}%"
         rec_w_str = f"{res['recommended_weight']*100:>5.1f}%"
         
-        print(f"{asset:<6} | {res['impact_score']:>7.2f}% | {res['original_P_win']:>3.2f}->{res['new_P_win']:<4.2f} | {curr_w_str:<8} | {rec_w_str:<8} | {color}{res['action']:<10}{reset}")
+        print(f"{asset:<6} | {denom:<5} | {res['impact_score']:>7.2f}% | {res['original_P_win']:>3.2f}->{res['new_P_win']:<4.2f} | {curr_w_str:<8} | {rec_w_str:<8} | {color}{res['action']:<10}{reset}")
     
-    print("=" * 75 + "\n")
+    print("=" * 80 + "\n")

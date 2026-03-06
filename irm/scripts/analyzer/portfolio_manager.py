@@ -52,7 +52,7 @@ class PortfolioManager:
             return (' ' * padding) + text
 
     def list_portfolio(self, owner="Admin"):
-        """Fetch and display portfolio holdings for a specific owner."""
+        """Fetch and display portfolio holdings, grouped by denomination slot."""
         # Query Portfolio node info
         port_cypher = f"MATCH (p:Portfolio {{owner: '{owner}'}}) RETURN p.name, p.strategy, p.total_value, p.currency"
         port_result = self.query_falkor(port_cypher)
@@ -62,40 +62,35 @@ class PortfolioManager:
             return
 
         p_name, p_strategy, p_total_value, p_currency = port_result.result_set[0]
+        base_currency = p_currency or "USD"
         
-        header_width = 86
+        header_width = 92
         print("\n" + "=" * header_width)
-        print(f" PORTFOLIO STATUS: {owner}")
+        print(f" PORTFOLIO STATUS: {owner} (Base Currency: {base_currency})")
         print("=" * header_width)
         print(f" Name:     {p_name}")
         print(f" Strategy: {p_strategy}")
-        print(f" Value:    {p_total_value:,.2f} {p_currency}")
+        print(f" Total NAV: {p_total_value:,.2f} {base_currency}")
         print("-" * header_width)
         
-        # Query Holdings
+        # Query Holdings with denomination
         holdings_cypher = (
             f"MATCH (p:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(a:Asset) "
-            f"RETURN a.ticker, a.name, r.weight_pct"
+            f"RETURN a.ticker, a.name, r.weight_pct, r.denomination"
         )
         holdings_result = self.query_falkor(holdings_cypher)
         
         if not holdings_result or not holdings_result.result_set:
             print(" No holdings found.")
         else:
-            # Table Header
-            ticker_h = self._pad("TICKER", 10)
-            name_h   = self._pad("NAME", 28)
-            shares_h = self._pad("SHARES", 12, 'right')
-            cost_h   = self._pad("AVG COST", 12, 'right')
-            weight_h = self._pad("WEIGHT (%)", 12, 'right')
-            print(f"{ticker_h} | {name_h} | {shares_h} | {cost_h} | {weight_h}")
-            print("-" * header_width)
+            # Group holdings by denomination
+            slots = {}  # { denomination: [ {ticker, name, weight, shares, avg_cost}, ... ] }
             
-            total_calc_weight = 0.0
             for row in holdings_result.result_set:
                 ticker = row[0]
                 name = row[1]
                 weight_pct = float(row[2] or 0.0)
+                denomination = row[3] if len(row) > 3 and row[3] else base_currency
                 
                 # Fetch shares and avg_cost from Redis Hash
                 redis_key = f"irm:portfolio:{owner}:holdings:{ticker}"
@@ -103,15 +98,50 @@ class PortfolioManager:
                 shares = float(redis_data.get('shares', 0.0))
                 avg_cost = float(redis_data.get('avg_cost', 0.0))
                 
-                total_calc_weight += weight_pct
+                slots.setdefault(denomination, []).append({
+                    "ticker": ticker,
+                    "name": name,
+                    "weight_pct": weight_pct,
+                    "shares": shares,
+                    "avg_cost": avg_cost
+                })
+            
+            # Render each denomination slot
+            total_calc_weight = 0.0
+            multi_currency = len(slots) > 1
+            
+            for denom in sorted(slots.keys(), key=lambda d: (d != base_currency, d)):
+                holdings = slots[denom]
+                slot_weight = sum(h["weight_pct"] for h in holdings)
                 
-                # Table Row with CJK-aware padding
-                r_ticker = self._pad(ticker, 10)
-                r_name   = self._pad(name[:28], 28)
-                r_shares = self._pad(f"{shares:>12.2f}", 12, 'right')
-                r_cost   = self._pad(f"{avg_cost:>12.2f}", 12, 'right')
-                r_weight = self._pad(f"{weight_pct*100:>11.1f}%", 12, 'right')
-                print(f"{r_ticker} | {r_name} | {r_shares} | {r_cost} | {r_weight}")
+                if multi_currency:
+                    print(f"\n [{denom} Slot]")
+                    print("-" * header_width)
+                
+                # Table Header
+                ticker_h = self._pad("TICKER", 10)
+                name_h   = self._pad("NAME", 28)
+                shares_h = self._pad("SHARES", 12, 'right')
+                cost_h   = self._pad(f"AVG COST", 12, 'right')
+                weight_h = self._pad("WEIGHT (%)", 12, 'right')
+                print(f"{ticker_h} | {name_h} | {shares_h} | {cost_h} | {weight_h}")
+                print("-" * header_width)
+                
+                for h in holdings:
+                    total_calc_weight += h["weight_pct"]
+                    
+                    r_ticker = self._pad(h["ticker"], 10)
+                    r_name   = self._pad(h["name"][:28], 28)
+                    r_shares = self._pad(f"{h['shares']:>12.2f}", 12, 'right')
+                    r_cost   = self._pad(f"{h['avg_cost']:>12.2f}", 12, 'right')
+                    r_weight = self._pad(f"{h['weight_pct']*100:>11.1f}%", 12, 'right')
+                    print(f"{r_ticker} | {r_name} | {r_shares} | {r_cost} | {r_weight}")
+                
+                if multi_currency:
+                    print("-" * header_width)
+                    sub_label = self._pad(f"[{denom} Subtotal]", 10)
+                    sub_weight = self._pad(f"{slot_weight*100:>11.1f}%", 12, 'right')
+                    print(f"{sub_label} | {self._pad('', 28)} | {' '*12} | {' '*12} | {sub_weight}")
             
             print("-" * header_width)
             t_label  = self._pad("TOTAL", 10)
@@ -121,8 +151,13 @@ class PortfolioManager:
         
         print("=" * header_width + "\n")
 
-    def update_holding(self, owner, ticker, shares, avg_cost):
-        """Update or create a holding in Redis and ensure the [:HOLDS] edge exists in FalkorDB."""
+    def update_holding(self, owner, ticker, shares, avg_cost, denomination=None):
+        """Update or create a holding in Redis and ensure the [:HOLDS] edge exists in FalkorDB.
+        
+        Args:
+            denomination: Currency denomination for this holding (e.g. 'USD', 'CNY').
+                          If None, falls back to the Portfolio node's base currency.
+        """
         if not self.graph or not self.redis_client:
             return False
 
@@ -131,6 +166,14 @@ class PortfolioManager:
         if not asset_res or not asset_res.result_set:
             logger.error(f"Asset with ticker '{ticker}' not found in ontology graph.")
             return False
+
+        # Resolve denomination: explicit param > Portfolio base currency
+        if denomination is None:
+            port_res = self.query_falkor(f"MATCH (p:Portfolio {{owner: '{owner}'}}) RETURN p.currency")
+            if port_res and port_res.result_set:
+                denomination = port_res.result_set[0][0] or "USD"
+            else:
+                denomination = "USD"
 
         # 2. Redis & Graph Cleanup vs Update
         redis_key = f"irm:portfolio:{owner}:holdings:{ticker}"
@@ -146,12 +189,13 @@ class PortfolioManager:
             )
             self.query_falkor(delete_edge_cypher)
         else:
-            # Update Redis Ledger
+            # Update Redis Ledger (now includes denomination)
             self.redis_client.hset(redis_key, mapping={
                 "shares": str(shares),
-                "avg_cost": str(avg_cost)
+                "avg_cost": str(avg_cost),
+                "denomination": denomination
             })
-            logger.info(f"Updated Redis ledger for {owner}:{ticker} -> Shares: {shares}, AvgCost: {avg_cost}")
+            logger.info(f"Updated Redis ledger for {owner}:{ticker} -> Shares: {shares}, AvgCost: {avg_cost}, Denom: {denomination}")
 
             # 3. Ensure [:HOLDS] edge exists in FalkorDB (Create if not present)
             edge_check_cypher = (
@@ -161,12 +205,19 @@ class PortfolioManager:
             edge_res = self.query_falkor(edge_check_cypher)
             
             if not edge_res or not edge_res.result_set:
-                logger.info(f"Creating missing [:HOLDS] edge for {owner} -> {ticker}")
+                logger.info(f"Creating missing [:HOLDS] edge for {owner} -> {ticker} (denom: {denomination})")
                 create_edge_cypher = (
                     f"MATCH (p:Portfolio {{owner: '{owner}'}}), (a:Asset {{ticker: '{ticker}'}}) "
-                    f"CREATE (p)-[:HOLDS {{id: 'edge_{owner}_{ticker}', weight_pct: 0.0}}]->(a)"
+                    f"CREATE (p)-[:HOLDS {{id: 'edge_{owner}_{ticker}', weight_pct: 0.0, denomination: '{denomination}'}}]->(a)"
                 )
                 self.query_falkor(create_edge_cypher)
+            else:
+                # Edge exists — update denomination on it
+                update_denom_cypher = (
+                    f"MATCH (p:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(a:Asset {{ticker: '{ticker}'}}) "
+                    f"SET r.denomination = '{denomination}'"
+                )
+                self.query_falkor(update_denom_cypher)
 
         # 4. Trigger weights recalculation
         logger.info("Triggering weight recalculation...")
@@ -189,12 +240,16 @@ if __name__ == "__main__":
     update_parser.add_argument("shares", type=float, help="Number of shares")
     update_parser.add_argument("avg_cost", type=float, help="Average cost per share")
     update_parser.add_argument("--owner", default="Admin", help="Portfolio owner")
+    update_parser.add_argument("--denom", default=None,
+                               help="Currency denomination (e.g. USD, CNY, JPY). "
+                                    "Defaults to portfolio's base currency if not specified.")
     
     args = parser.parse_args()
     
     mgr = PortfolioManager()
     if args.command == "update":
-        success = mgr.update_holding(args.owner, args.ticker, args.shares, args.avg_cost)
+        success = mgr.update_holding(args.owner, args.ticker, args.shares, args.avg_cost, 
+                                     denomination=args.denom)
         if success:
             print(f"[+] Successfully updated {args.ticker} for {args.owner}.")
         else:

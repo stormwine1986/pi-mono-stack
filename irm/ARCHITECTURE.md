@@ -21,7 +21,7 @@
 | **可交易标的** | `Asset:Investable` | **终端投资资产**。如 `Stock`, `EquityETF`, `Commodity`, `Crypto`。这是组合持仓的实体，承载凯利理论的基本面先验假设。 | 继承 `Asset` 属性，新增 `base_win_rate`, `expected_upside`, `expected_max_dd` (用于凯利计算)。 |
 | **结构聚合** | `Sector` / `Theme` | **行业与主题概念**。用于归拢同质化风险或捕捉特定叙事（如 AI 基础设施）产生的共振。 | `name` (英文标识), `name_cn` (中文定性) |
 | **定价枢纽** | `Hub:Valuation` / `Earnings` | **宏微观翻译器 (Translators)** ★。负责吸收宏观冲击并翻译为资产估值或盈利预期的变动。 | `target` (关联Ticker), `pe_min`/`pe_max` (PE经验带), `eps_min`/`eps_max` (盈利增速带), `percentile` (水位) |
-| **账户终端** | `Portfolio` | **系统决策终点**。代表用户的资金分布与持股逻辑，是所有风控建议下发的锚点。 | `owner` (所属权), `name` (组合名), `total_value` (总净值/NAV), `currency` (本位币) |
+| **账户终端** | `Portfolio` | **系统决策终点**。代表用户的资金分布与持股逻辑，是所有风控建议下发的锚点。 | `owner` (所属权), `name` (组合名), `total_value` (总净值/NAV, 以本位币计价), `currency` (本位币/Base Currency, 汇总报告的换算基准) |
 | **虚拟代理** | `Event` | **传导第一推动力**。由 LLM 解析新闻后生成的非持久化实时节点，作为冲击计算的入口。 | `delta_pct` (初始Delta), `event_logic` (事件成因) |
 
 #### 2.1.2 核心传导边 (Edge Types)
@@ -37,11 +37,16 @@
 | `[:HEAVILY_EXPOSED_TO]` | **重度暴露** | 描述资产对特定行业或风险因素（如 AI 基础设施）的非对称暴露。 |
 | `[:DETERMINES]` | **价值决定** | 限定于 `Hub` → `Asset` 方向。承载 $P = PE \times EPS$ 的决定逻辑。 |
 | `[:BELONGS_TO]` / `[:COMPOSES]` / `[:TRACKS]` | **结构归属** | 定义行业归属、成分占比或指数追踪关系。携带 `composition_weight` 属性。 |
-| `[:HOLDS]` | **仓位触达** ★ | **实时联动边**。承载 `weight_pct` (资产市值占比)。与之关联的物理账本（股数、成本）存储在 Redis 中。 |
+| `[:HOLDS]` | **仓位触达** ★ | **实时联动边**。承载 `weight_pct` (全局权重, 以本位币换算后的占比), `denomination` (计价币种, 标注该持仓的结算货币如 USD/CNY/JPY)。与之关联的物理账本(股数/成本/币种)存储在 Redis 中。 |
 
 > [!tip] 图谱更新机制：静态结构与动态权重的分离
 > - **结构层 (低频/静态)**：本体拓扑描述的是金融市场的“逻辑物理法则”（如航司依赖燃油），结构极其稳定，无需高频更新。
 > - **参数层 (中高频/动态)**：节点状态（分位数）和边的权重（Beta）由自动化管道从 OpenBB/FRED 等数据源同步。分析引擎推演前，只需基于“当前水位”完成**动态赋权 (Dynamic Modifier)** 即可得出非线性结论，无需每秒重构高维图谱。
+
+> [!tip] 多币种计价槽位 (Denomination Slot) 设计
+> - **计价分离原则**：`[:HOLDS]` 边的 `denomination` 属性标注每个持仓的计价货币(如 USD/CNY/JPY)，权重在各自币域内独立计算后通过 FX 汇率节点(`Asset:Macro:Currency`)换算为本位币口径的全局 `weight_pct`。
+> - **Redis 物理账本**：`irm:portfolio:{owner}:holdings:{ticker}` 的 Hash 中包含 `shares`/`avg_cost`/`denomination` 三个字段。
+> - **向后兼容**：未标注 `denomination` 的边/记录自动 fallback 到 Portfolio 节点的 `currency`(本位币)。
 
 
 ### 2.2 推理计算层 (影响分析引擎)

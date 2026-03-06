@@ -1,5 +1,5 @@
 {
   "defaultProvider": "litellm",
-  "defaultModel": "gemini-3.1-flash-lite-preview",
-  "defaultThinkingLevel": "medium"
+  "defaultModel": "gemini-3-flash-preview",
+  "defaultThinkingLevel": "low"
 }

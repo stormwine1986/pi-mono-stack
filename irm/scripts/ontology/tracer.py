@@ -33,8 +33,17 @@ class IRMTracer:
             return None
 
     def get_portfolio_assets(self, owner="Admin"):
-        """Fetch current portfolio holdings from the graph to make it dynamic."""
-        cypher = f"MATCH (n:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(m) RETURN m.ticker, r.weight_pct"
+        """Fetch current portfolio holdings from the graph to make it dynamic.
+        Returns dict with denomination info per asset for multi-currency awareness.
+        """
+        # Also fetch base_currency from Portfolio node
+        port_cypher = f"MATCH (n:Portfolio {{owner: '{owner}'}}) RETURN n.currency"
+        port_result = self._query_falkor(port_cypher)
+        base_currency = "USD"
+        if port_result and port_result.result_set:
+            base_currency = port_result.result_set[0][0] or "USD"
+
+        cypher = f"MATCH (n:Portfolio {{owner: '{owner}'}})-[r:HOLDS]->(m) RETURN m.ticker, r.weight_pct, r.denomination"
         result = self._query_falkor(cypher)
         
         portfolio = {}
@@ -54,10 +63,15 @@ class IRMTracer:
                 redis_key = f"irm:portfolio:{owner}:holdings:{ticker}"
                 redis_data = r_client.hgetall(redis_key)
                 
+                # Denomination priority: edge attribute > Redis > base_currency
+                edge_denom = row[2] if len(row) > 2 and row[2] else None
+                denomination = edge_denom or redis_data.get('denomination', base_currency)
+                
                 portfolio[ticker] = {
                     "weight": float(row[1]),
                     "shares": float(redis_data.get('shares', 0.0)),
-                    "avg_cost": float(redis_data.get('avg_cost', 0.0))
+                    "avg_cost": float(redis_data.get('avg_cost', 0.0)),
+                    "denomination": denomination
                 }
             except (ValueError, IndexError, TypeError):
                 continue
@@ -427,16 +441,37 @@ if __name__ == "__main__":
                 # Additive aggregation
                 summary_impacts[target] += imp['step_impact']
         
-        total_portfolio_impact = 0.0
+        # Group assets by denomination for multi-currency display
+        denom_groups = {}
         for asset in portfolio_assets:
-            total_imp = summary_impacts.get(asset, 0)
-            weight = portfolio[asset]['weight']
-            weighted_imp = total_imp * weight
-            total_portfolio_impact += weighted_imp
+            denom = portfolio[asset].get('denomination', 'USD')
+            denom_groups.setdefault(denom, []).append(asset)
+        
+        multi_currency = len(denom_groups) > 1
+        total_portfolio_impact = 0.0
+        
+        for denom in sorted(denom_groups.keys(), key=lambda d: (d != 'USD', d)):
+            assets_in_slot = denom_groups[denom]
             
-            # Color coding for terminal output
-            color = "\033[91m" if total_imp < -5 else "\033[93m" if total_imp < 0 else "\033[92m" if total_imp > 0 else "\033[0m"
-            print(f"{asset:<5} | Weight: {weight*100:>5.1f}% | Absolute Impact: {color}{total_imp:>7.2f}%\033[0m | Weighted PNL Contribution: {weighted_imp:>7.2f}%")
+            if multi_currency:
+                print(f"\n  [{denom} Slot]")
+                print(f"  {'-' * 64}")
+            
+            slot_weighted_sum = 0.0
+            for asset in assets_in_slot:
+                total_imp = summary_impacts.get(asset, 0)
+                weight = portfolio[asset]['weight']
+                weighted_imp = total_imp * weight
+                total_portfolio_impact += weighted_imp
+                slot_weighted_sum += weighted_imp
+                
+                # Color coding for terminal output
+                color = "\033[91m" if total_imp < -5 else "\033[93m" if total_imp < 0 else "\033[92m" if total_imp > 0 else "\033[0m"
+                print(f"{asset:<5} | Weight: {weight*100:>5.1f}% | Absolute Impact: {color}{total_imp:>7.2f}%\033[0m | Weighted PNL: {weighted_imp:>7.2f}%")
+            
+            if multi_currency:
+                slot_color = "\033[91m" if slot_weighted_sum < 0 else "\033[92m" if slot_weighted_sum > 0 else "\033[0m"
+                print(f"  [{denom} Subtotal PNL: {slot_color}{slot_weighted_sum:>+7.2f}%\033[0m]")
         
         print("-" * 66)
         port_color = "\033[91m" if total_portfolio_impact < -5 else "\033[93m" if total_portfolio_impact < 0 else "\033[92m" if total_portfolio_impact > 0 else "\033[0m"

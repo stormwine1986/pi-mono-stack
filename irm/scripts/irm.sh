@@ -71,7 +71,7 @@ case "$COMMAND" in
         echo "Available Commands:"
         echo "  tracer    - Trace macro-to-micro impact propagation (supports --target <ticker>)"
         echo "  portfolio list   - List asset allocation status for a specified owner"
-        echo "  portfolio update - Update a specific holding (e.g. irm portfolio update NVDA 300 850)"
+        echo "  portfolio update - Update a specific holding (e.g. irm portfolio update NVDA 300 850 --denom USD)"
         echo "  portfolio advisor - Get Kelly-based allocation advice (requires impacts/weights)"
         echo ""
         echo "  pmk search - Search Polymarket prediction markets"

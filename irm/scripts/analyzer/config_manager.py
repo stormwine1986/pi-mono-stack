@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
+import unicodedata
 
 # Ensure /app is in sys.path so 'scripts' package can be found
 app_root = str(Path(__file__).resolve().parent.parent.parent)
@@ -14,6 +15,34 @@ if app_root not in sys.path:
     sys.path.append(app_root)
 
 from scripts.providers import get_provider, PROVIDER_REGISTRY
+
+def get_display_width(s):
+    """Calculate the display width of a string considering wide characters (e.g. Chinese)."""
+    width = 0
+    for char in s:
+        if unicodedata.east_asian_width(char) in ('W', 'F'):
+            width += 2
+        else:
+            width += 1
+    return width
+
+def format_cell(s, width, align='left'):
+    """Format a cell with specific width, handling wide characters."""
+    s = s or "-"
+    current_width = 0
+    truncated_s = ""
+    for char in s:
+        w = 2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
+        if current_width + w > width:
+            break
+        truncated_s += char
+        current_width += w
+    
+    padding = max(0, width - current_width)
+    if align == 'left':
+        return truncated_s + ' ' * padding
+    else:
+        return ' ' * padding + truncated_s
 
 def get_redis_client():
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
@@ -38,25 +67,44 @@ def list_sources():
         print("No data sources configured in Redis.")
         return
 
-    print(f"{'Ticker':<10} | {'Symbol':<15} | {'Provider':<10}")
-    print("-" * 45)
+    cols = [
+        ("Ticker", 10, 'left'),
+        ("Name", 20, 'left'),
+        ("Symbol", 15, 'left'),
+        ("Provider", 15, 'left')
+    ]
+    
+    header = " | ".join(format_cell(c[0], c[1], c[2]) for c in cols)
+    print("\n" + header)
+    print("-" * (sum(c[1] for c in cols) + 3 * (len(cols) - 1)))
+
     for ticker, data_str in sorted(assets.items()):
         try:
             data = json.loads(data_str)
+            name = data.get("name", "-")
             symbol = data.get("symbol", "N/A")
             provider = data.get("provider", "yfinance")
-            print(f"{ticker:<10} | {symbol:<15} | {provider:<10}")
+            
+            cells = [
+                format_cell(ticker, 10, 'left'),
+                format_cell(name, 20, 'left'),
+                format_cell(symbol, 15, 'left'),
+                format_cell(provider, 15, 'left')
+            ]
+            print(" | ".join(cells))
         except Exception:
             print(f"{ticker:<10} | Error parsing data: {data_str}")
 
-def update_source(ticker, symbol, provider):
+def update_source(ticker, symbol, provider, name=None):
     r = get_redis_client()
     data = {
         "symbol": symbol,
         "provider": provider
     }
+    if name:
+        data["name"] = name
     r.hset("irm:config:sources", ticker, json.dumps(data))
-    print(f"Successfully updated source {ticker}: {symbol} via {provider}")
+    print(f"Successfully updated source {ticker}: {symbol} ({name or ''}) via {provider}")
 
 def delete_source(ticker):
     r = get_redis_client()
@@ -106,20 +154,26 @@ def query_source(target_ticker=None):
 
                 if not df.empty and value_col in df.columns:
                     status = "\033[92mPASS\033[0m"
-                    details = f"Last Value: {df[value_col].iloc[-1]:.2f} (from {symbol})"
+                    details = f"Value: {df[value_col].iloc[-1]:.2f} ({symbol})"
                 else:
                     status = "\033[91mFAIL\033[0m"
-                    details = "Empty dataset or missing column"
+                    details = "Empty dataset"
             except Exception as e:
                 status = "\033[91mFAIL\033[0m"
-                details = str(e).split('\n')[0][:45]  # Truncate error messages
+                details = str(e).split('\n')[0][:45]
                 
-            print(f"{ticker:<10} | {provider:<10} | {status:<10} | {details}")
+            cols = [
+                (ticker, 10, 'left'),
+                (provider, 12, 'left'),
+                (status, 10, 'left'),
+                (details, 50, 'left')
+            ]
+            print(" | ".join(format_cell(c[0], c[1], c[2]) for c in cols))
             
         except Exception as e:
             print(f"{ticker:<10} | {'-':<10} | \033[91mERROR\033[0m | {e}")
 
-    print("-" * 75 + "\n")
+    print("-" * 88 + "\n")
 
 def main():
     parser = argparse.ArgumentParser(description="IRM Configuration Manager")
@@ -133,6 +187,7 @@ def main():
     update_sources_parser.add_argument("ticker", help="Asset ticker (e.g. US10Y)")
     update_sources_parser.add_argument("symbol", help="Provider symbol (e.g. ^TNX)")
     update_sources_parser.add_argument("provider", choices=list(PROVIDER_REGISTRY.keys()), help="Data provider")
+    update_sources_parser.add_argument("--name", help="Display name for the source (e.g. Chinese name)")
     
     query_sources_parser = sources_subparsers.add_parser("query", help="Query real-time data from sources")
     query_sources_parser.add_argument("ticker", nargs="?", help="Specific ticker to query (optional)")
@@ -146,7 +201,7 @@ def main():
         if args.subcommand == "ls":
             list_sources()
         elif args.subcommand == "update":
-            update_source(args.ticker, args.symbol, args.provider)
+            update_source(args.ticker, args.symbol, args.provider, args.name)
         elif args.subcommand == "query":
             query_source(args.ticker)
         elif args.subcommand == "rm":
