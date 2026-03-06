@@ -141,7 +141,21 @@ docker exec irm irm graph edges --to VIX
 docker exec irm irm graph exec "MATCH (n) RETURN COUNT(n)"
 ```
 
-### 6. 系统备份与恢复 (Maintenance)
+## 6. 后台自动化任务 (Background Tasks)
+
+系统利用 **Dkron** 管理以下周期性任务，确保图谱数据的时效性与计算精度：
+
+| 任务名称 (Dkron ID) | 执行频率 | 核心作用 |
+| :--- | :--- | :--- |
+| `irm-update-earnings` | 每日 12:00 | 自动从数据源拉取标的分析师预期收益增长 (Forward Growth)，映射至 `Hub:Earnings` 节点的期望分位点。 |
+| `irm-update-percentiles` | 每日 12:00 | 拉取实时 P/E 估值，并结合 ERP (权益风险溢价) 压力计算 `Hub:Valuation` 中枢的复合风险水位。 |
+| `irm-update-price-signals` | 每日 12:00 | 同步所有 `:Asset` 价格及 3 年历史分位点，完成后自动触发全量持仓账本的权重重算 (`Portfolio` 维护)。 |
+| `irm-calc-betas` | 手动/按需 | 基于 3 年周线历史数据，利用 OLS 线性回归自动更新资产间传导路径的 `base_beta` 系数 (仅更新显著性 p < 0.1 的边)。 |
+
+> [!TIP]
+> 任务状态可通过 Dkron 控制面板 (通常在端口 `8080`) 或 IRM 容器日志进行监控。
+
+## 7. 系统备份与恢复 (Maintenance)
 涵盖图谱拓扑、边逻辑及 Redis 中的动态持仓账本。
 ```bash
 docker exec irm irm backup
