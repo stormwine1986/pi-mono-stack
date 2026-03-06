@@ -19,5 +19,5 @@ build/
 
 !.pi/agent/workspace/memory/
 .pi/agent/workspace/memory/*.md
-irm/scripts/analyzer/__pycache__/**
-irm/scripts/ontology/__pycache__/**
+
+**.pyc

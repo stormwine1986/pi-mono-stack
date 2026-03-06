@@ -129,12 +129,11 @@ def query_source(target_ticker=None):
         print("No sources to query.")
         return
 
-    print(f"\n{'Ticker':<10} | {'Provider':<10} | {'Status':<10} | {'Details'}")
-
     fred_api_key = os.getenv("FRED_API_KEY")
     start_date = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
 
     print(f"\n{'Ticker':<10} | {'Provider':<10} | {'Status':<10} | {'Details'}")
+
     print("-" * 75)
 
     for ticker, data_str in sorted(to_test.items()):

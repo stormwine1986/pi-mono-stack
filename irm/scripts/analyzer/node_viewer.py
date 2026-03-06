@@ -55,11 +55,19 @@ class IRMNodeViewer:
             right_pad = padding - left_pad
             return (' ' * left_pad) + text + (' ' * right_pad)
 
-    def list_nodes(self, filter_label=None):
-        """Fetch and display all nodes except Portfolio with optional label filtering."""
-        label_match = f":{filter_label}" if filter_label else ""
+    def list_nodes(self, filter_label=None, filter_ticker=None, as_json=False):
+        """Fetch and display nodes with optional label or ticker filtering."""
+        where_clauses = ["NOT n:Portfolio"]
+        if filter_label:
+            where_clauses.append(f"n:{filter_label}")
+        if filter_ticker:
+            where_clauses.append(f"COALESCE(n.ticker, n.target) = '{filter_ticker}'")
+            
+        where_clause = " WHERE " + " AND ".join(where_clauses)
+        
+        # We'll use a more flexible return for JSON if needed
         cypher = (
-            f"MATCH (n{label_match}) WHERE NOT n:Portfolio "
+            f"MATCH (n) {where_clause} "
             "RETURN labels(n), "
             "       COALESCE(n.ticker, n.target, '-'), "
             "       n.name, "
@@ -75,7 +83,29 @@ class IRMNodeViewer:
         result = self._query_falkor(cypher)
         
         if not result or not result.result_set:
-            print("[!] No nodes found (excluding Portfolio).")
+            if as_json:
+                import json
+                print(json.dumps([]))
+            else:
+                print("[!] No nodes found matching filters.")
+            return
+
+        if as_json:
+            import json
+            keys = [
+                "labels", "ticker", "name", "value", "percentile",
+                "pe_min", "pe_max", "eps_min", "eps_max",
+                "pe_percentile", "erp_percentile",
+                "name_cn", "metric_type", "role", "market",
+                "base_win_rate", "expected_upside", "expected_max_dd"
+            ]
+            output = []
+            for row in result.result_set:
+                node_dict = dict(zip(keys, row))
+                # Convert list of labels to a standard list if it's not already
+                node_dict["labels"] = list(node_dict["labels"])
+                output.append(node_dict)
+            print(json.dumps(output, indent=2, ensure_ascii=False))
             return
 
         # Header Definition
@@ -102,10 +132,12 @@ class IRMNodeViewer:
             
             # Use Investable display name if it has the label to shorten Output
             is_investable = "Investable" in labels
-            if is_investable:
-                labels.remove("Asset") # Show Asset:Stock:Investable as Stock:Investable
+            # Create a copy of labels to avoid modifying row in-place if needed
+            display_labels = list(labels)
+            if is_investable and "Asset" in display_labels:
+                display_labels.remove("Asset") # Show Asset:Stock:Investable as Stock:Investable
             
-            display_type = ":".join(labels)[:18]
+            display_type = ":".join(display_labels)[:18]
             display_id = str(node_id)[:8]
             
             # Smart Name: Use CN if available for Sector/Theme/Asset with CN, else EN
@@ -116,8 +148,8 @@ class IRMNodeViewer:
             display_name = str(raw_name)
             if self._get_display_width(display_name) > 28:
                 # Basic truncation for safety
-                display_name = display_name[:20] + ".." 
-
+                display_name = display_name[:24] + ".." 
+            
             display_val = f"{float(value):.2f}" if value is not None else "-"
             
             # --- Build Details String ---
@@ -162,7 +194,9 @@ class IRMNodeViewer:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRM Node Viewer")
     parser.add_argument("--label", help="Filter nodes by label (e.g. Investable, Stock, Sector)")
+    parser.add_argument("--ticker", help="Filter nodes by ticker or target (e.g. QQQM, PE_NVDA)")
+    parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     args = parser.parse_args()
     
     viewer = IRMNodeViewer()
-    viewer.list_nodes(filter_label=args.label)
+    viewer.list_nodes(filter_label=args.label, filter_ticker=args.ticker, as_json=args.json)
