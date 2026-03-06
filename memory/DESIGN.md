@@ -67,7 +67,7 @@
 
 ### 5.1 HTTP 服务 (Port: 18090)
 - `POST /search`: 语义检索记忆。
-    - 入参: `{ query: string, user_id: string, agent_id?: string, limit?: number }`
+    - 入参: `{ query: string, user_id: string, agent_id?: string, limit?: number, score_threshold?: number }` (默认 threshold: 1.0)
 - `GET /memories`: 按用户拉取全量记忆列表。
     - 入参: `?user_id=xxx`
 - `GET /history`: 查看记忆审计历史。

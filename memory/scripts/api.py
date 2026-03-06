@@ -21,7 +21,7 @@ class SearchRequest(BaseModel):
     user_id: str
     agent_id: Optional[str] = None
     limit: Optional[int] = 5
-    score_threshold: Optional[float] = 0.7
+    score_threshold: Optional[float] = 1.0
 
 class MemoryItem(BaseModel):
     id: str
