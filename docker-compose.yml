@@ -63,9 +63,9 @@ services:
     environment:
       - GEMINI_API_KEY
       - OPENROUTER_API_KEY
-      - LANGFUSE_PUBLIC_KEY=pk-lf-493ce7f9-d1f6-4482-a658-fe4ac98da5c4
-      - LANGFUSE_OTEL_HOST=https://us.cloud.langfuse.com
-      - LANGFUSE_SECRET_KEY
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318/v1/traces
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_SERVICE_NAME=pi-mono-litellm
     volumes:
       - ./.pi/agent/litellm.config.yaml:/app/config.yaml
     command: "--config /app/config.yaml"
@@ -265,7 +265,37 @@ services:
               count: all
               capabilities: [gpu]
     network_mode: host
+  
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    container_name: openobserve
+    environment:
+      - ZO_ROOT_USER_EMAIL=${OPENOBSERVE_ADMIN_ACCOUNT}
+      - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD}
+      - ZO_DATA_DIR=/data
+      - ZO_HTTP_PORT=5080
+    volumes:
+      - openobserve_data:/data
+    network_mode: host
     restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      - OPENOBSERVE_AUTH_HEADER=${OPENOBSERVE_AUTH_HEADER}
+      - OTEL_COLLECTOR_GRPC_PORT=4317
+      - OTEL_COLLECTOR_HTTP_PORT=4318
+    volumes:
+      - ./.pi/agent/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      - openobserve
 
 volumes:
   redis_data:
+  openobserve_data:

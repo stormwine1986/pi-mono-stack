@@ -14,12 +14,14 @@ load_secrets() {
   export GEMINI_API_KEY="$(pass show GEMINI_API_KEY)"
   export TELEGRAM_TOKEN="$(pass show TELEGRAM_TOKEN)"
   export OPENROUTER_API_KEY="$(pass show OPENROUTER_API_KEY)"
-  export LANGFUSE_SECRET_KEY="$(pass show LANGFUSE_SECRET_KEY)"
   export TAVILY_API_KEY="$(pass show TAVILY_API_KEY)"
   export GITHUB_TOKEN="$(pass show GITHUB_TOKEN)"
   export HF_TOKEN="$(pass show HF_TOKEN)"
   export TWITTERAPI_KEY="$(pass show TWITTERAPI_KEY)"
   export FRED_API_KEY="$(pass show FRED_API_KEY)"
+  export OPENOBSERVE_ADMIN_ACCOUNT="$(pass show OPENOBSERVE_ADMIN_ACCOUNT)"
+  export OPENOBSERVE_ROOT_PASSWORD="$(pass show OPENOBSERVE_ROOT_PASSWORD)"
+  export OPENOBSERVE_AUTH_HEADER="Basic $(echo -n "${OPENOBSERVE_ADMIN_ACCOUNT}:${OPENOBSERVE_ROOT_PASSWORD}" | base64)"
 
   echo "✅ Secrets loaded."
 }

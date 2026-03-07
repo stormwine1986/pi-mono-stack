@@ -27,4 +27,4 @@ model_list:
 litellm_settings:
   drop_params: true
   set_verbose: false
-  callbacks: ["langfuse_otel","prometheus"]
+  callbacks: ["otel","prometheus"]
