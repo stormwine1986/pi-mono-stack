@@ -8,7 +8,7 @@ shift
 
 case "$COMMAND" in
     tracer)
-        python3 /app/scripts/ontology/tracer.py "$@"
+        python3 /app/scripts/analyzer/tracer.py "$@"
         ;;
 
     portfolio)
@@ -61,8 +61,8 @@ case "$COMMAND" in
         bash /home/pi-mono/.pi/agent/workspace/.irm/EXPORTED_CONFIG.sh
         echo "[+] Restore complete."
         ;;
-    pmk)
-        python3 /app/scripts/pmk/gamma_tool.py "$@"
+    polymarket)
+        python3 /app/scripts/polymarket/cli.py "$@"
         ;;
     help|*)
         echo "IRM (Investment Risk Management) CLI"
@@ -74,7 +74,7 @@ case "$COMMAND" in
         echo "  portfolio update - Update a specific holding (e.g. irm portfolio update NVDA 300 850 --denom USD)"
         echo "  portfolio advisor - Get Kelly-based allocation advice (requires impacts/weights)"
         echo ""
-        echo "  pmk search - Search Polymarket prediction markets"
+        echo "  polymarket search - Search Polymarket prediction markets"
         echo ""
         echo "  graph     - Graph operations (nodes, edges, exec)"
  

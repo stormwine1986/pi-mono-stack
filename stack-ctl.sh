@@ -48,6 +48,11 @@ cmd_logs() {
   docker compose -f "${SCRIPT_DIR}/docker-compose.yml" logs -f "$@"
 }
 
+cmd_exec() {
+  echo "🏃 Executing command in stack …"
+  docker compose -f "${SCRIPT_DIR}/docker-compose.yml" exec "$@"
+}
+
 cmd_build() {
   echo "🏗️ Building stack …"
   docker compose -f "${SCRIPT_DIR}/docker-compose.yml" build "$@"
@@ -117,6 +122,7 @@ Commands:
   restart Stop and start all services (down then up)
   build   Build or rebuild services
   logs    Follow service logs (docker compose logs -f)
+  exec    Run a command in a running container (docker compose exec)
   backup  Compress and backup agent workspace to rclone remote (garage)
 
 EOF
@@ -132,7 +138,7 @@ COMMAND="$1"; shift
 
 # Load secrets for all commands that might interact with docker compose
 case "$COMMAND" in
-  up|down|restart|build|logs) load_secrets ;;
+  up|down|restart|build|logs|exec) load_secrets ;;
 esac
 
 case "$COMMAND" in
@@ -141,6 +147,7 @@ case "$COMMAND" in
   restart) cmd_restart "$@" ;;
   build)   cmd_build "$@" ;;
   logs)    cmd_logs "$@" ;;
+  exec)    cmd_exec "$@" ;;
   backup)  cmd_backup ;;
   *)      echo "❌ Unknown command: $COMMAND"; usage ;;
 esac

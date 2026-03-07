@@ -106,7 +106,7 @@ docker exec irm irm portfolio advisor --impacts '{"QQQM": -5, "NVDA": 10}'
 访问 Polymarket 预测市场数据，用于辅助判断宏观事件概率或市场情绪。
 ```bash
 # 搜索预测市场 (例如搜索 Bitcoin 相关市场)
-docker exec irm irm pmk search "Bitcoin"
+docker exec irm irm polymarket search "Bitcoin"
 ```
 
 ### 5. 图谱审计与可视化 (Graph Auditing)

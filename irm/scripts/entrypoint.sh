@@ -52,16 +52,16 @@ else
     }
 
     # Register earnings update (Daily at 12:00)
-    register_job "update-earnings" "0 0 12 * * *" "docker exec irm python3 /app/scripts/ontology/update_earnings.py"
+    register_job "update-earnings" "0 0 12 * * *" "docker exec irm python3 /app/scripts/providers/update_earnings.py"
     
     # Register percentile update (Daily at 12:00)
-    register_job "update-percentiles" "0 0 12 * * *" "docker exec irm python3 /app/scripts/ontology/update_percentiles.py"
+    register_job "update-percentiles" "0 0 12 * * *" "docker exec irm python3 /app/scripts/providers/update_percentiles.py"
     
     # Register price signals update (Daily at 12:00)
-    register_job "update-price-signals" "0 0 12 * * *" "docker exec irm python3 /app/scripts/ontology/update_price_signals.py"
+    register_job "update-price-signals" "0 0 12 * * *" "docker exec irm python3 /app/scripts/providers/update_price_signals.py"
 
     # Register Beta calculation (Manual only)
-    register_job "calc-betas" "@manually" "docker exec irm python3 /app/scripts/ontology/calc_betas.py"
+    register_job "calc-betas" "@manually" "docker exec irm python3 /app/scripts/providers/calc_betas.py"
 
     echo "Dkron job registration complete."
 fi

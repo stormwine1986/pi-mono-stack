@@ -65,7 +65,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  gamma_tool search "Bitcoin" --limit 5
+  irm polymarket search "Bitcoin" --limit 5
 """
     )
     subparsers = parser.add_subparsers(dest="action", required=True, help="Available actions")
