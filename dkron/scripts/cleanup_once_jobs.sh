@@ -17,8 +17,8 @@ ONE_HOUR_AGO=$((NOW - 3600))
 NAMES_TO_DELETE=$(curl -s "${DKRON_URL}/jobs" | jq -r --argjson limit "$ONE_HOUR_AGO" '
   .[] | 
   select((.next == null or .next == "0001-01-01T00:00:00Z") and (.success_count + .error_count > 0)) |
-  select(((.last_success // "1970-01-01T00:00:00Z") | fromdateiso8601 < $limit) and 
-         ((.last_error // "1970-01-01T00:00:00Z") | fromdateiso8601 < $limit)) |
+  select(((.last_success // "1970-01-01T00:00:00Z") | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 < $limit) and 
+         ((.last_error // "1970-01-01T00:00:00Z") | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 < $limit)) |
   .name
 ')
 
