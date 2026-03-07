@@ -29,7 +29,6 @@ load_secrets() {
 
 # ---------- commands ----------
 cmd_up() {
-  load_secrets
   echo "📂 Ensuring .pi/agent directories exist …"
   mkdir -p "${SCRIPT_DIR}/.pi/agent/sessions"
   mkdir -p "${SCRIPT_DIR}/.pi/agent/workspace"
@@ -130,6 +129,11 @@ if [[ $# -lt 1 ]]; then
 fi
 
 COMMAND="$1"; shift
+
+# Load secrets for all commands that might interact with docker compose
+case "$COMMAND" in
+  up|down|restart|build|logs) load_secrets ;;
+esac
 
 case "$COMMAND" in
   up)      cmd_up "$@" ;;
