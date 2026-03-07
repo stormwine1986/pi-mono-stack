@@ -1,0 +1,22 @@
+services:
+  irm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    container_name: irm
+    environment:
+      - REDIS_URL=redis://127.0.0.1:6379
+      - FRED_API_KEY
+      - DKRON_URL=http://127.0.0.1:18047/v1
+    volumes:
+      - ${BASE_CONFIG_PATH}/.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+      dkron:
+        condition: service_healthy

@@ -1,0 +1,23 @@
+services:
+  swe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    image: pi-mono-stack-swe:latest
+    container_name: swe
+    environment:
+      - GITHUB_TOKEN
+      - HF_TOKEN
+      - HF_ENDPOINT=https://hf-mirror.com
+      - DKRON_URL=http://127.0.0.1:18047/v1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${BASE_CONFIG_PATH}/.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      dkron:
+        condition: service_healthy

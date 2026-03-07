@@ -1,4 +1,17 @@
 name: pi-mono-stack
+
+include:
+  - path: memory/docker-compose.yml
+  - path: gateway/docker-compose.yml
+  - path: dkron/docker-compose.yml
+  - path: pi-mono/docker-compose.yml
+  - path: browser-use/docker-compose.yml
+  - path: tavily/docker-compose.yml
+  - path: swe/docker-compose.yml
+  - path: wikipedia/docker-compose.yml
+  - path: twitter/docker-compose.yml
+  - path: irm/docker-compose.yml
+
 services:
   redis:
     image: falkordb/falkordb:edge-alpine
@@ -11,52 +24,6 @@ services:
     restart: unless-stopped
     network_mode: host
 
-  agent:
-    build:
-      context: pi-mono
-      dockerfile: Dockerfile
-      network: host
-    image: pi-mono-agent:latest
-    container_name: agent
-    network_mode: host
-    depends_on:
-      redis:
-        condition: service_started
-    environment:
-      - REDIS_URL=redis://127.0.0.1:6379
-      - DKRON_URL=http://127.0.0.1:18047/v1
-      - MEMORY_URL=http://127.0.0.1:18090
-      - AGENT_ID=0
-      - LITELLM_METRICS_URL=http://127.0.0.1:4000/metrics
-      - LLAMA_SERVER_METRICS_URL=http://127.0.0.1:18080/metrics
-    volumes:
-      - ./.pi:/home/pi-mono/.pi
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
-
-  gateway:
-    build:
-      context: gateway
-      dockerfile: Dockerfile
-      network: host
-    container_name: gateway
-    depends_on:
-      redis:
-        condition: service_started
-      dkron:
-        condition: service_healthy
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
-    environment:
-      - TELEGRAM_TOKEN
-      - REDIS_URL=redis://127.0.0.1:6379
-      - TG_ADMIN_ID=7722403902
-      - DKRON_URL=http://127.0.0.1:18047/v1
-      - LLAMA_SERVER_URL=http://127.0.0.1:18080/v1
-      - WEB_PORT=48329
-
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.81.9-nightly
     container_name: litellm
@@ -67,160 +34,15 @@ services:
       - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - OTEL_SERVICE_NAME=pi-mono-litellm
     volumes:
-      - ./.pi/agent/litellm.config.yaml:/app/config.yaml
+      - ${BASE_CONFIG_PATH}/.pi/agent/litellm.config.yaml:/app/config.yaml
     command: "--config /app/config.yaml"
     network_mode: host
-
-  memory:
-    build:
-      context: memory
-      dockerfile: Dockerfile
-      network: host
-    container_name: memory
-    environment:
-      - REDIS_URL=redis://127.0.0.1:6379
-      - LLAMA_SERVER_URL=http://127.0.0.1:18080/v1
-      - LLAMA_EMBEDDING_URL=http://127.0.0.1:18081/v1
-      - MEM_API_PORT=18090
-    volumes:
-      - ./.pi/agent/workspace/.memory:/data
-    network_mode: host
-    restart: unless-stopped
-    depends_on:
-      - redis
-      - llama-server
-      - llama-embedding
-      
-  dkron:
-    build:
-      context: dkron
-      dockerfile: Dockerfile
-      network: host
-    container_name: dkron
-    environment:
-      - DKRON_HTTP_ADDR=:18047
-      - DKRON_URL=http://127.0.0.1:18047/v1
-      - REDIS_URL=redis://127.0.0.1:6379
-    volumes:
-      - ./.pi/agent/workspace/.dkron:/dkron.data:rw
-      - /var/run/docker.sock:/var/run/docker.sock
-    network_mode: host
-    restart: unless-stopped
-    depends_on:
-      - redis
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:18047/v1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  browser-use:
-    build:
-      context: browser-use
-      dockerfile: Dockerfile
-      network: host
-    container_name: browser-use
-    environment:
-      - HOME=/home/pi-mono
-      - DKRON_URL=http://127.0.0.1:18047/v1
-    volumes:
-      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-    depends_on:
-      dkron:
-        condition: service_healthy
-
-  tavily:
-    build:
-      context: tavily
-      dockerfile: Dockerfile
-      network: host
-    container_name: tavily
-    environment:
-      - TAVILY_API_KEY
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-
-  swe:
-    build:
-      context: swe
-      dockerfile: Dockerfile
-      network: host
-    image: pi-mono-stack-swe:latest
-    container_name: swe
-    environment:
-      - GITHUB_TOKEN
-      - HF_TOKEN
-      - HF_ENDPOINT=https://hf-mirror.com
-      - DKRON_URL=http://127.0.0.1:18047/v1
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-    depends_on:
-      dkron:
-        condition: service_healthy
-
-  wikipedia:
-    build:
-      context: wikipedia
-      dockerfile: Dockerfile
-      network: host
-    container_name: wikipedia
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-
-  twitter:
-    build:
-      context: twitter
-      dockerfile: Dockerfile
-      network: host
-    container_name: twitter
-    environment:
-      - TWITTERAPI_KEY
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-
-  irm:
-    build:
-      context: irm
-      dockerfile: Dockerfile
-      network: host
-    container_name: irm
-    environment:
-      - REDIS_URL=redis://127.0.0.1:6379
-      - FRED_API_KEY
-      - DKRON_URL=http://127.0.0.1:18047/v1
-    volumes:
-      - ./.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace:rw
-    labels:
-      role: Tools
-    network_mode: host
-    restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_started
-      dkron:
-        condition: service_healthy
 
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: llama-server
     volumes:
-      - ./.pi/agent/workspace/.swe/download:/models
+      - ${BASE_CONFIG_PATH}/.pi/agent/workspace/.swe/download:/models
     command: >
       -m /models/Qwen3.5-9B-Q5_K_M.gguf
       --port 18080
@@ -246,7 +68,7 @@ services:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: llama-embedding
     volumes:
-      - ./.pi/agent/workspace/.swe/download:/models
+      - ${BASE_CONFIG_PATH}/.pi/agent/workspace/.swe/download:/models
     command: >
       -m /models/qwen3_embedding_4b_q8_0/unsloth.Q8_0.gguf
       --port 18081
@@ -265,7 +87,7 @@ services:
               count: all
               capabilities: [gpu]
     network_mode: host
-  
+
   openobserve:
     image: public.ecr.aws/zinclabs/openobserve:latest
     container_name: openobserve
@@ -288,7 +110,7 @@ services:
       - OTEL_COLLECTOR_GRPC_PORT=4317
       - OTEL_COLLECTOR_HTTP_PORT=4318
     volumes:
-      - ./.pi/agent/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+      - ${BASE_CONFIG_PATH}/.pi/agent/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     network_mode: host

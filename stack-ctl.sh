@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export COMPOSE_PROJECT_NAME=pi-mono-stack
+export BASE_CONFIG_PATH="${SCRIPT_DIR}"
 
 # ---------- secrets from pass ----------
 load_secrets() {

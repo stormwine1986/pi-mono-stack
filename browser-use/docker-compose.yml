@@ -1,0 +1,19 @@
+services:
+  browser-use:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    container_name: browser-use
+    environment:
+      - HOME=/home/pi-mono
+      - DKRON_URL=http://127.0.0.1:18047/v1
+    volumes:
+      - ${BASE_CONFIG_PATH}/.pi/agent/workspace:/home/pi-mono/.pi/agent/workspace
+    labels:
+      role: Tools
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      dkron:
+        condition: service_healthy
